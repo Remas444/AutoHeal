@@ -14,8 +14,8 @@ pre-registration commits and every historical result file, unedited.
 - **The code matches the evaluated version.** Compare the checksums below (`sha256sum`, or `git hash-object` for the
   blob column, after normalising line endings to LF).
 
-Expected `pytest` result here: **397 passed, 29 skipped.** That is the 264 checks from the evaluated snapshot plus
-133 tests added with the console and the evidence site. The original 293 checks all pass in the development repository.
+Expected `pytest` result here: **406 passed, 29 skipped.** That is the 264 checks from the evaluated snapshot plus
+142 tests added with the console and the evidence site. The original 293 checks all pass in the development repository.
 
 ## Checks that need the private development repository (29 skipped here)
 

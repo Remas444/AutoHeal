@@ -39,9 +39,9 @@ with approvals_tab:
     if not requests:
         with st.container(border=True):
             theme.empty_state("No approval requests",
-                              "Actions above the allowed risk level are never executed by the recovery engine. They wait "
-                              "here for a human. To see one, set Automatic actions allowed to Low only in Advanced settings, "
-                              "then run the payment scenario.")
+                              "Actions above the allowed risk level wait here for a human decision. To see one, set "
+                              "Automatic actions allowed to Low only in Advanced settings, then recover from Orders stuck "
+                              "before payment.")
     for ap in requests:
         with st.container(border=True):
             info, status = st.columns([5, 1])
@@ -71,35 +71,42 @@ with approvals_tab:
                     st.rerun()
 
 # ------------------------------------------------------------------- guardrails
+def _policy(tool) -> str:
+    if tool.terminal:
+        return "Closes the incident" if tool.name == "escalate_to_human" else "Closes only if verification passes"
+    if not tool.mutating:
+        return "Always allowed" if not tool.advances_time else "Allowed, within a time budget"
+    return "Automatic" if RISK_ORDER[tool.risk] <= RISK_ORDER[s.max_auto_risk] else "Needs human approval"
+
+
 with guardrails_tab:
+    st.markdown(f"""
+- **Riskier actions wait for a human.** Only actions up to {s.max_auto_risk} risk run automatically.
+- **Paid orders are not re-charged.** Payment retries skip any order with a payment record.
+- **The SQL investigation tool is read-only.** It cannot change data.
+- **Repeated repairs must show progress.** An identical repair may repeat only while it helps.
+- **Resolved means verified.** An incident closes as resolved only if independent verification passes.
+""")
+    st.markdown("**Limits for each incident.** Reaching any limit ends in an escalation to a human, never a silent stop.")
     theme.tiles([
         theme.Tile("Highest automatic risk", s.max_auto_risk.capitalize(), "info", "Change in Advanced settings"),
         theme.Tile("Dry run", "On" if s.dry_run else "Off", "warning" if s.dry_run else "", "Proposes without executing"),
-        theme.Tile("Actions per incident", s.max_mutations, caption="Then escalates"),
-        theme.Tile("Steps per incident", s.max_steps, caption="Then escalates"),
-        theme.Tile("Verification attempts", s.max_verify_attempts, caption="Then escalates"),
-        theme.Tile("Blocks before stopping", s.max_guard_blocks, caption="Then escalates"),
+        theme.Tile("Actions", s.max_mutations),
+        theme.Tile("Steps", s.max_steps),
+        theme.Tile("Verification attempts", s.max_verify_attempts),
+        theme.Tile("Blocks before stopping", s.max_guard_blocks),
     ], "secondary")
-    st.markdown("""
+    with st.expander("How each guardrail works", icon=":material/shield:"):
+        st.markdown("""
 - **Payment safety.** Retrying stuck payments never re-charges an order that already has a payment record. If every stuck order is already paid, the tool refuses and changes nothing.
 - **Read-only investigation.** The SQL tool is restricted by SQLite's authorizer and cannot read internal tables.
 - **Progress-aware repeat guard.** An identical repair may repeat only while it makes measurable progress.
 - **Independent verification.** Finishing an incident always triggers probe orders and a full re-check. Every limit ends in an escalation, never a silent stop.
 """)
-    st.subheader("Tool policy", anchor=False)
-
-
-    def _policy(tool) -> str:
-        if tool.terminal:
-            return "Closes the incident" if tool.name == "escalate_to_human" else "Closes only if verification passes"
-        if not tool.mutating:
-            return "Always allowed" if not tool.advances_time else "Allowed, within a time budget"
-        return "Automatic" if RISK_ORDER[tool.risk] <= RISK_ORDER[s.max_auto_risk] else "Needs human approval"
-
-
-    st.table(pd.DataFrame([{"Tool": t.name.replace("_", " ").capitalize(), "Risk": "Read-only" if t.risk == "none" else t.risk.capitalize(),
-                            "Policy now": _policy(t)} for t in TOOLS.values()]),
-             hide_index=True, alt="Every tool with its risk level and current policy")
+    with st.expander("Tool policy", icon=":material/policy:"):
+        st.table(pd.DataFrame([{"Tool": t.name.replace("_", " ").capitalize(), "Risk": "Read-only" if t.risk == "none" else t.risk.capitalize(),
+                                "Policy now": _policy(t)} for t in TOOLS.values()]),
+                 hide_index=True, alt="Every tool with its risk level and current policy")
 
 # ---------------------------------------------------------------- action record
 with record_tab:

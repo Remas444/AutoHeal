@@ -250,6 +250,61 @@ def test_required_disclosures_are_on_the_page():
         assert phrase.lower() in text, phrase
 
 
+# ------------------------------------------------------------------ navigation
+class _Details(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.depth = self.deepest = self.total = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "details":
+            self.depth += 1
+            self.total += 1
+            self.deepest = max(self.deepest, self.depth)
+
+    def handle_endtag(self, tag):
+        self.depth -= tag == "details"
+
+
+def test_the_main_page_has_the_four_sections_in_order():
+    html = (SITE / "index.html").read_text(encoding="utf-8")
+    nav = re.search(r"<nav.*?</nav>", html, re.S).group(0)
+    assert re.findall(r'href="#(\w+)"', nav) == ["overview", "comparison", "runs", "methodology"]
+    assert re.findall(r'<section id="(\w+)"', html) == ["overview", "comparison", "runs", "methodology"]
+
+
+def test_expanders_are_few_and_never_nested():
+    parser = _Details()
+    parser.feed((SITE / "index.html").read_text(encoding="utf-8"))
+    assert parser.total == 4 and parser.deepest == 1
+    # A recorded event and a run's technical details: neither is placed inside another expander.
+    script = (SITE / "app.js").read_text(encoding="utf-8")
+    assert script.count('h("details"') == 2
+    technical = script[script.index("function technical("):script.index("function runBody(")]
+    assert technical.count('h("details"') == 1 and "eventNode" not in technical
+
+
+def test_every_detail_stays_reachable_from_a_secondary_view():
+    html = (SITE / "index.html").read_text(encoding="utf-8")
+    for view in ('id="view-all"', 'id="runs-body"', 'id="latency-chart"', 'id="invalid-list"', 'id="provenance"'):
+        assert view in html, view
+    script = (SITE / "app.js").read_text(encoding="utf-8")
+    for control in ("All activity", "Show original record", "Download this record", "JSON.stringify(r.raw, null, 2)"):
+        assert control in script, control
+
+
+def test_key_steps_hide_only_supporting_events(data):
+    script = (SITE / "app.js").read_text(encoding="utf-8")
+    hidden = set(re.findall(r"(\w+): 1", re.search(r"SUPPORTING_EVENTS = \{(.*?)\}", script).group(1)))
+    assert hidden == {"observe", "route", "thought", "nudge"}
+    assert 'e.kind === "action" && e.stage === "Decide"' in script
+    assert '"Showing " + shown.length + " of "' in script  # the reader is told when events are hidden
+    for _, run in _all_runs(data):
+        for i, event in enumerate(run["events"]):
+            if event["kind"] == "action" and event["stage"] == "Decide":  # a request is only hidden next to its execution
+                assert run["events"][i + 1]["kind"] == "action" and run["events"][i + 1]["stage"] == "Execute"
+
+
 # ------------------------------------------------------------------ deployment and safety
 def _links():
     class Links(HTMLParser):

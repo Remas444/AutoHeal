@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="168" height="32" viewBox="0 0 168 32" role="img" aria-label="AutoHeal">
-  <rect x="1" y="1" width="30" height="30" rx="7" fill="#0E7C7B"/>
-  <path d="M6 17h5l3-7 4 13 3-6h5" fill="none" stroke="#E6EBF2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <svg width="32" height="32" viewBox="16.5 15 74 74">
+  <path d="M81.69 42.25A31.25 31.25 0 1 0 81.69 61.75" fill="none" stroke="#5EC4C0" stroke-width="6.8" stroke-linecap="round"/>
+  <path d="M27.5 52H37.5L44.4 38.5 51 65 57 46 61.5 52H81" fill="none" stroke="#E6EBF2" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="85" cy="52" r="4.4" fill="#5EC4C0"/>
+  </svg>
   <text x="41" y="22.5" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="650" letter-spacing="-0.2" fill="#E6EBF2">AutoHeal</text>
 </svg>

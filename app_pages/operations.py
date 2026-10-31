@@ -4,7 +4,7 @@ import streamlit as st
 from autoheal.db import rows, wipe_system
 from autoheal.scenarios import SCENARIOS, setup_scenario
 from autoheal_ui import panels, recovery, session, theme
-from autoheal_ui.activity import ActivityLog, classify_outcome, derive_lifecycle, next_step, parse_json
+from autoheal_ui.activity import ActivityLog, classify_outcome, derive_lifecycle, parse_json
 from autoheal_ui.content import ENGINE_LABELS, RISK_LABELS, SCENARIO_COPY
 
 c = session.current()
@@ -52,7 +52,6 @@ def _symptoms(n: int) -> str:
 def _status_tiles() -> None:
     snap = _snapshot()
     found, running, status = snap["findings"], snap["running"], snap["status"]
-    counts = session.system_counts(c.conn)
 
     if running:
         condition = theme.Tile("System condition", _symptoms(len(found)) if found else "Recovering", "warning",
@@ -82,9 +81,6 @@ def _status_tiles() -> None:
     engine = snap["run"].engine if running else ss.engine
     theme.tiles([condition, active, theme.Tile("Recovery engine", ENGINE_LABELS[engine], "info",
                                                "Calls an LLM (metered)" if engine == "openrouter" else "Offline, no cost")])
-    theme.tiles([theme.Tile("Stuck orders", counts["stuck"]), theme.Tile("Messages queued", counts["queued"]),
-                 theme.Tile("Dead letters", counts["dead_letters"]), theme.Tile("Workflows waiting", counts["waiting"])],
-                "secondary")
     pending = rows(c.conn, "SELECT COUNT(*) AS n FROM approvals WHERE status='pending'")[0]["n"]
     if pending:
         st.warning(f"**Human attention needed:** {pending} approval request{'s' * (pending != 1)} waiting for a decision.",
@@ -99,7 +95,7 @@ def _lifecycle() -> None:
     if status:
         theme.banner(classify_outcome(snap["report"] or {"status": status}, snap["events"]))
     run = snap["run"]
-    if run and run.error and not running:
+    if run and run.error and not running and (status or snap["findings"]):  # Reset clears it along with the incident
         st.error(f"The recovery run stopped: {run.error}", icon=":material/error:")
 
     # A run finished since the last look: redraw everything, including the controls it had locked.
@@ -112,11 +108,11 @@ def _activity_panel() -> None:
     snap = _snapshot()
     st.subheader("Agent activity", anchor=False)
     if snap["running"]:
-        st.caption("Live: each event appears as the runtime reports it. Open one for its tool and result.")
+        st.caption("Live. Open an event for its tool and result.")
     elif snap["status"] is None:
         st.caption("Detected by the health checks. Recovery has not started.")
     else:
-        st.caption(f"Chronological record of incident #{snap['incident']['id']}. Open an event for its tool and result.")
+        st.caption(f"Record of incident #{snap['incident']['id']}. Open an event for its tool and result.")
     panels.activity_feed(snap["events"], key="ops", height=480, follow=snap["running"])
 
 
@@ -125,9 +121,8 @@ def _detail_panel() -> None:
     st.subheader("Incident details", anchor=False)
     incident = snap["incident"]
     approvals = rows(c.conn, "SELECT * FROM approvals WHERE incident_id=? ORDER BY id", (incident["id"],)) if incident else []
-    outcome = classify_outcome(snap["report"] or {"status": snap["status"]}, snap["events"]) if snap["status"] else None
     panels.incident_detail(snap["report"], snap["events"], approvals, findings=[f.model_dump() for f in snap["findings"]],
-                           outcome=outcome)
+                           status=snap["status"])
 
 
 # ---------------------------------------------------------------------- layout
@@ -138,13 +133,12 @@ st.fragment(_status_tiles, run_every=_live_every())()
 
 locked = c.run_active
 with st.container(border=True):
-    pick, engine_col, guide_col = st.columns([5, 4, 4], gap="medium")
+    pick, engine_col = st.columns(2, gap="medium")
     with pick:
-        scenario = st.selectbox("Incident simulator: scenario", list(SCENARIOS), key="scenario_widget", disabled=locked,
+        scenario = st.selectbox("Scenario", list(SCENARIOS), key="scenario_widget", disabled=locked,
                                 format_func=lambda n: SCENARIO_COPY[n].title)
         ss.scenario = scenario
-        copy = SCENARIO_COPY[scenario]
-        st.caption(f"{copy.what_happens} {copy.what_to_expect}")
+        st.caption(SCENARIO_COPY[scenario].symptom)
     with engine_col:
         engine = st.selectbox("Recovery engine", list(ENGINE_LABELS), key="engine_widget", disabled=locked,
                               format_func=lambda k: ENGINE_LABELS[k] + (
@@ -154,10 +148,6 @@ with st.container(border=True):
         if needs_key:
             st.warning("LLM recovery is not configured: `OPENROUTER_API_KEY` is not set in `.env`. The Rule-based Playbook "
                        "runs offline.", icon=":material/key_off:")
-        elif engine == "openrouter":
-            st.caption("Investigates with metered LLM calls. Usage and limits are in Safety & Audit.")
-        else:
-            st.caption("Fixed rules, offline and free. It applies known repairs without investigating.")
         if c.settings.dry_run:
             st.caption("Dry run is on: actions are proposed, not executed.")
         if c.settings.max_auto_risk != "medium":
@@ -167,32 +157,23 @@ with st.container(border=True):
     latest = session.latest_incident(c.conn)
     latest_status = latest["status"] if latest else None
     ready = bool(found_now) or (ss.injected == "healthy" and not latest)
-    idle = not found_now and not latest and ss.injected != "healthy"
-    with guide_col:
-        guide = next_step(locked, len(found_now), ss.injected, latest_status)
-        st.markdown(f"**{guide.title}**")
-        st.caption(guide.detail)
+    start_is_next = ready and latest_status in (None, "open")
 
-    inject_col, start_col, traffic_col, reset_col = st.columns(4)
-    if inject_col.button("Inject Fault", key="inject", type="primary" if idle else "secondary", width="stretch",
+    # The teal button is always the next useful action.
+    inject_col, start_col, reset_col = st.columns([5, 5, 2])
+    if inject_col.button("Inject Fault", key="inject", type="secondary" if start_is_next else "primary", width="stretch",
                          icon=":material/bolt:", disabled=locked,
                          help="Starts a fresh simulated shop, injects this fault and runs traffic so symptoms appear."):
         setup_scenario(c.conn, scenario, seed=c.settings.seed)
         ss.injected = scenario
         st.rerun()
-    if start_col.button("Start Recovery", key="start", type="primary" if ready and latest_status in (None, "open") else "secondary",
+    if start_col.button("Start Recovery", key="start", type="primary" if start_is_next else "secondary",
                         width="stretch", icon=":material/play_arrow:", disabled=locked or needs_key or not ready,
                         help="Runs the selected recovery engine against the current symptoms."):
         recovery.start(c.settings, engine, c.session_tag)
         ss.watching_run = True
         st.rerun()
-    if traffic_col.button("Generate Test Traffic", key="traffic", width="stretch", disabled=locked,
-                          help=f"Runs 3 ticks of orders using this scenario's traffic profile "
-                               f"({SCENARIOS[scenario].spike or 12} orders per tick). Only needed if symptoms have not "
-                               "appeared, or to let an active fault grow."):
-        c.shop.run(3, n_orders=SCENARIOS[scenario].spike)
-        st.rerun()
-    if reset_col.button("Reset", key="reset", width="stretch", icon=":material/restart_alt:", disabled=locked,
+    if reset_col.button("Reset", key="reset", type="tertiary", width="stretch", icon=":material/restart_alt:", disabled=locked,
                         help="Returns the simulated shop to a clean, healthy state and clears its incidents."):
         wipe_system(c.conn)
         c.shop.bootstrap()
@@ -200,10 +181,18 @@ with st.container(border=True):
         ss.injected = None
         st.rerun()
 
+    with st.expander("Additional controls", icon=":material/tune:", key="additional-controls"):
+        if st.button("Generate Test Traffic", key="traffic", disabled=locked,
+                     help=f"Runs 3 ticks of orders using this scenario's traffic profile "
+                          f"({SCENARIOS[scenario].spike or 12} orders per tick). Only needed if symptoms have not "
+                          "appeared, or to let an active fault grow."):
+            c.shop.run(3, n_orders=SCENARIOS[scenario].spike)
+            st.rerun()
+
 st.fragment(_lifecycle, run_every=_live_every())()
 
 if locked or _snapshot()["events"]:
-    activity_col, detail_col = st.columns([6, 7], gap="medium")
+    activity_col, detail_col = st.columns([7, 6], gap="medium")
     with activity_col:
         st.fragment(_activity_panel, run_every=_live_every())()
     with detail_col:
@@ -211,7 +200,4 @@ if locked or _snapshot()["events"]:
 else:
     st.subheader("Agent activity", anchor=False)
     with st.container(border=True):
-        theme.empty_state("No active incident", "The system is healthy. Simulate a failure to watch AutoHeal handle it.",
-                          ["Choose a scenario and a recovery engine above.",
-                           "Click Inject Fault. Symptoms appear here as soon as the health checks detect them.",
-                           "Click Start Recovery and follow each step, from detection to the final outcome."])
+        theme.empty_state("No active incident", "Inject a fault to watch AutoHeal investigate, recover and verify.")

@@ -15,13 +15,13 @@
   var GROUPS = DATA.groups;
   var ORDER = ["recovered", "correct_escalation", "correct_noop", "recovered_and_escalated", "guardrail_stop", "wrong_diagnosis", "detection_failure"];
   var NOT_CORRECT = { guardrail_stop: 1, wrong_diagnosis: 1, detection_failure: 1 };
-  var FILTERS = [["all", "All scenarios"], ["difference", "Where AI made a difference"], ["tied", "Both correct"],
-                 ["shared_failure", "Shared failures"], ["control", "Healthy controls"]];
   var STAGE_NAMES = { Outcome: "Resolve / Escalate" };
   var GLYPH = { completed: "✓", active: "•", failed: "×", blocked: "!", escalated: "!", skipped: "–", pending: "" };
   var EVENT_TONES = { success: "success", info: "info", warning: "safety", danger: "failure" };
+  // Hidden from "Key steps" only: read-only investigation, model routing, notes and passing checks. Every event stays under "All activity".
+  var SUPPORTING_EVENTS = { observe: 1, route: 1, thought: 1, nudge: 1 };
 
-  var state = { group: GROUPS[0].key, filter: "all", open: {}, x: { group: GROUPS[0].key, caseId: null, number: 1, engine: "agent" } };
+  var state = { group: GROUPS[0].key, view: "explore", allGroup: GROUPS[0].key, allActivity: false, x: { group: GROUPS[0].key, caseId: null, number: 1, engine: "agent" } };
 
   // -------------------------------------------------------------------- helpers
   function h(tag, attrs) {
@@ -55,11 +55,6 @@
   function usd(v) { return "$" + (v === 0 ? "0" : v.toFixed(4)); }
   function seconds(v) { return v < 0.1 ? "< 0.1 s" : (v < 10 ? v.toFixed(1) : Math.round(v)) + " s"; }
   function ratio(p) { return p ? p[0] + "/" + p[1] : null; }
-  function names(ids, g) { return ids.map(function (id) { return caseOf(g, id).title; }); }
-  function sentenceList(items) {
-    if (items.length < 2) return items.join("");
-    return items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
-  }
 
   // Shared tooltip: hover or keyboard focus, on anything with data-tip.
   var tip = document.getElementById("tip");
@@ -106,12 +101,10 @@
   }
   function renderOverview() {
     var p = GROUPS[0], a = p.agent, b = p.playbook;
-    var lead = names(p.paired.agent_only_cases, p);
     var tied = p.cases.filter(function (c) { return c.category === "tied"; });
     fill("answer", "In the prospective evaluation, the AI Agent reached the correct outcome in " + a.correct + " of " + a.total +
       " recorded runs and the rule-based Playbook in " + b.correct + " of " + b.total + ". All " + p.paired.agent_only +
-      " runs that only the AI Agent got right come from three scenario types disclosed in advance as favourable to it: " +
-      sentenceList(lead) + ". On the " + plural(tied.length, "fault scenario") + " where both were correct, the Playbook was far faster and free of API costs. " +
+      " runs that only the AI Agent got right come from three scenario types disclosed in advance as favourable to it. On the " + plural(tied.length, "fault scenario") + " where both were correct, the Playbook was far faster and free of API costs. " +
       "This shows where AI adds value. It does not show general superiority.");
 
     fill("group-cards", GROUPS.map(function (g) {
@@ -162,39 +155,21 @@
   }
   function openRun(groupKey, caseId, number, engine) {
     state.x = { group: groupKey, caseId: caseId, number: number, engine: engine };
-    renderExplorer();
+    state.view = "explore";
+    renderRuns();
     history.replaceState(null, "", "#run/" + caseId + "-" + number + "-" + engine);
     document.getElementById("runs").scrollIntoView();
   }
   function runLabel(n) { return "Recorded Run " + n; }
 
-  function caseDetail(g, c) {
-    var runs = runsOf(g, c.id);
-    return h("tr", { class: "detail" }, h("td", { colspan: "3" },
-      h("div", { class: "detail-grid" },
-        h("div", {}, h("h4", { text: "What happens" }), h("p", { text: c.what })),
-        h("div", {}, h("h4", { text: "Correct result" }), h("p", { text: c.correct })),
-        c.why ? h("div", {}, h("h4", { text: "Why the results differ" }), h("p", { text: c.why })) : null,
-        c.bias ? h("div", {}, h("h4", { text: "Bias disclosed before running" }), h("p", { text: c.bias })) : null),
-      h("div", { class: "run-links" }, runs.slice().sort(function (x, y) { return x.number - y.number || (x.engine < y.engine ? -1 : 1); }).map(function (r) {
-        return h("button", { type: "button", class: "link", text: runLabel(r.number) + ": " + r.engine_name, onclick: function () { openRun(g.key, c.id, r.number, r.engine); } });
-      }))));
-  }
   function renderMatrix(g) {
-    var rows = [];
-    g.cases.filter(function (c) { return state.filter === "all" || c.category === state.filter; }).forEach(function (c) {
-      var isOpen = !!state.open[g.key + c.id];
-      rows.push(h("tr", {},
-        h("td", {}, h("button", { type: "button", class: "row-toggle", "aria-expanded": String(isOpen),
-            onclick: function () { state.open[g.key + c.id] = !isOpen; renderComparison(); } },
-          h("span", { class: "chev", "aria-hidden": "true", text: isOpen ? "▾" : "▸" }),
-          h("span", {}, h("span", { class: "case-title", text: c.title }), h("span", { class: "meta" }, caseTags(c))))),
+    fill("matrix-body", g.cases.map(function (c) {
+      return h("tr", {},
+        h("td", {}, h("button", { type: "button", class: "row-link", onclick: function () { openRun(g.key, c.id, 1, "agent"); } },
+          h("span", { class: "case-title", text: c.title }), h("span", { class: "meta" }, caseTags(c)))),
         h("td", { "data-label": "AI Agent" }, resultCell(c.agent)),
-        h("td", { "data-label": "Rule-based Playbook" }, resultCell(c.playbook))));
-      if (isOpen) rows.push(caseDetail(g, c));
-    });
-    if (!rows.length) rows.push(h("tr", {}, h("td", { colspan: "3", class: "muted", text: "No scenarios of this kind in this group." })));
-    fill("matrix-body", rows);
+        h("td", { "data-label": "Rule-based Playbook" }, resultCell(c.playbook)));
+    }));
   }
   function renderInsights(g) {
     function list(cases, line) { return h("ul", {}, cases.map(function (c) { return h("li", {}, h("strong", { text: c.title }), line(c)); })); }
@@ -239,13 +214,13 @@
     fill("metrics-note", g.key === "prospective"
       ? "AI Agent time and steps cover the runs that called a model. Playbook API cost is zero because it makes no model calls."
       : "“Not recorded” means this group's result file has no such field. Its healthy control is shown in the table above.");
-
+  }
+  function renderInvalid(g) {
     var invalid = [];
     g.runs.forEach(function (r) {
       (r.raw.invalid_tool_calls || []).forEach(function (call) { invalid.push({ run: r, call: call }); });
     });
-    var panel = document.getElementById("invalid-panel");
-    panel.hidden = !invalid.length;
+    document.getElementById("invalid-panel").hidden = !invalid.length;
     fill("invalid-list", invalid.map(function (item) {
       var message = item.call.error;
       try { message = JSON.parse(message).error || message; } catch (e) { /* stored text stays as it is */ }
@@ -300,17 +275,16 @@
   }
   function renderComparison() {
     var g = group(state.group);
-    segmented("compare-group", GROUPS.map(function (x) { return [x.key, x.name]; }), state.group, function (k) { state.group = k; state.filter = "all"; renderComparison(); });
-    fill("compare-filter", FILTERS.filter(function (f) { return f[0] === "all" || g.cases.some(function (c) { return c.category === f[0]; }); }).map(function (f) {
-      var n = f[0] === "all" ? g.cases.length : g.cases.filter(function (c) { return c.category === f[0]; }).length;
-      return h("button", { type: "button", "aria-pressed": String(state.filter === f[0]), text: f[1] + " (" + n + ")", onclick: function () { state.filter = f[0]; renderComparison(); } });
-    }));
-    fill("compare-note", g.summary);
-    renderMatrix(g); renderInsights(g); renderMetrics(g); renderLatency(g); renderRunsTable(g);
+    segmented("compare-group", GROUPS.map(function (x) { return [x.key, x.name]; }), state.group, function (k) { state.group = k; renderComparison(); });
+    // The main group's description sits directly above in the overview; the note marks the switch to the other group.
+    var note = fill("compare-note", g.key === GROUPS[0].key ? "" : g.summary);
+    note.hidden = g.key === GROUPS[0].key;
+    renderMatrix(g); renderInsights(g); renderMetrics(g);
   }
 
   // ------------------------------------------------------------------- explorer
   function pretty(value) { return typeof value === "string" ? value : JSON.stringify(value, null, 2); }
+  function isKeyEvent(e) { return !SUPPORTING_EVENTS[e.kind] && !(e.kind === "action" && e.stage === "Decide"); }
   function eventNode(e) {
     var parts = [STAGE_NAMES[e.stage] || e.stage];
     if (e.step) parts.push("Step " + e.step);
@@ -322,11 +296,12 @@
       body.push(h("div", { class: "pre-label", text: "Recorded result" }), h("pre", { text: pretty(e.result) }));
       if (e.truncated) body.push(h("p", { class: "trunc-note", text: "This result was stored cut to " + DATA.trace_result_limit.toLocaleString("en-US") + " characters. The rest was not recorded." }));
     }
-    return h("details", { class: "ev tone-" + (EVENT_TONES[e.tone] || "info") },
-      h("summary", {}, h("span", { class: "ev-dot" }),
-        h("span", {}, h("span", { class: "ev-t", text: e.title }), e.summary ? h("span", { class: "ev-s", text: e.summary }) : null),
-        h("span", { class: "ev-stage", text: STAGE_NAMES[e.stage] || e.stage })),
-      h("div", { class: "ev-body" }, body));
+    var tone = "ev tone-" + (EVENT_TONES[e.tone] || "info");
+    var row = [h("span", { class: "ev-dot" }),
+      h("span", {}, h("span", { class: "ev-t", text: e.title }), e.summary ? h("span", { class: "ev-s", text: e.summary }) : null),
+      h("span", { class: "ev-stage", text: STAGE_NAMES[e.stage] || e.stage })];
+    if (parts.length === 1 && body.length === 1) return h("div", { class: tone }, h("div", { class: "ev-row" }, row));  // nothing more was recorded
+    return h("details", { class: tone }, h("summary", { class: "ev-row" }, row), h("div", { class: "ev-body" }, body));
   }
   function verdict(g, r) {
     var meaning = DATA.outcomes[r.outcome].meaning;
@@ -337,7 +312,7 @@
       h("div", { class: "t", text: r.outcome_label }),
       h("div", { class: "e", text: explain }),
       h("div", { class: "s" }, r.correct ? h("span", { class: "mark-ok", text: "✓ Scored correct" }) : h("span", { class: "mark-no", text: "× Scored not correct" }),
-        " for this scenario. Expected: " + caseOf(g, r.case).correct));
+        " for this scenario."));
   }
   function stepper(stages) {
     return h("div", { class: "stepper", role: "list", "aria-label": "Recorded lifecycle" }, stages.map(function (s) {
@@ -346,63 +321,77 @@
         h("div", { class: "n", text: s.name }), h("div", { class: "s", text: s.state_label }), s.detail ? h("div", { class: "d", text: s.detail }) : null);
     }));
   }
-  function miniTile(label, value) { return h("div", { class: "tile" }, h("div", { class: "l", text: label }), h("div", { class: "v", text: value })); }
+  function scenarioBrief(c) {
+    return h("div", { class: "brief" },
+      h("div", {}, h("h4", { text: "What happens" }), h("p", { text: c.what })),
+      h("div", {}, h("h4", { text: "Correct result" }), h("p", { text: c.correct })),
+      c.why ? h("div", {}, h("h4", { text: "Why the results differ" }), h("p", { text: c.why })) : null,
+      c.bias ? h("div", {}, h("h4", { text: "Bias disclosed before running" }), h("p", { text: c.bias })) : null);
+  }
+  function runStats(r) {
+    return h("dl", { class: "stats" }, [["Steps", r.steps], ["Tool calls", r.tool_calls], ["Actions executed", r.executed],
+      ["Time", r.invoked ? seconds(r.latency_s) : "–"], ["API cost", usd(r.cost_usd)], ["Model calls", r.llm_requests]].map(function (s) {
+      return h("div", {}, h("dt", { text: s[0] }), h("dd", { text: s[1] }));
+    }));
+  }
   function kvTable(pairs) {
     return h("table", { class: "kv" }, h("tbody", {}, pairs.map(function (p) { return h("tr", {}, h("th", { scope: "row", text: p[0] }), h("td", { text: p[1] })); })));
   }
   function technical(g, r) {
     var rawBox = h("div", {});
     var file = g.source.file.split("/").pop();
+    var show = h("button", { type: "button", class: "btn", text: "Show original record", onclick: function () {
+      var showing = !!rawBox.firstChild;
+      fill(rawBox, showing ? null : h("pre", { text: JSON.stringify(r.raw, null, 2) }));
+      show.textContent = showing ? "Show original record" : "Hide original record";
+    } });
     return h("details", { class: "panel" },
-      h("summary", {}, "Technical details"),
+      h("summary", {}, "Technical details and original record"),
       kvTable([["Scenario identifier", r.case], ["Original seed", r.seed], ["Engine identifier", r.raw.agent], ["Recorded outcome", r.outcome], ["Recorded status", r.status],
                ["Original scenario title", r.raw.title], ["Source file", file], ["Position in its results list", r.source_index]]),
-      h("details", { class: "panel", ontoggle: function (e) {
-          if (e.target.open && !rawBox.firstChild) add(rawBox, h("pre", { text: JSON.stringify(r.raw, null, 2) }));
-        } }, h("summary", {}, "Original record"),
+      h("div", { class: "actions" }, show,
         h("button", { type: "button", class: "btn", text: "Download this record", onclick: function () {
           var blob = new Blob([JSON.stringify(r.raw, null, 2)], { type: "application/json" });
           var link = h("a", { href: URL.createObjectURL(blob), download: "autoheal-" + r.case + "-" + r.seed + "-" + r.raw.agent + ".json" });
           document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(link.href);
-        } }), rawBox));
+        } })),
+      rawBox);
   }
   function runBody(g, r) {
-    var truncated = r.events.filter(function (e) { return e.truncated; }).length;
+    var key = r.events.filter(isKeyEvent);
+    var trimmed = key.length < r.events.length;
+    var shown = trimmed && !state.allActivity ? key : r.events;
+    var truncated = shown.filter(function (e) { return e.truncated; }).length;
     var notes = [];
     if (r.engine === "playbook") notes.push("Rule-based recovery makes no model calls and does not investigate. Any model name in its original record is routing bookkeeping.");
     if (!r.invoked && r.fault_present) notes.push("The fault was present, but no health check raised a symptom, so nothing was invoked. There are no tool calls to show.");
     if (!r.invoked && !r.fault_present) notes.push("The system was healthy and no symptom was raised, so nothing was invoked. There are no tool calls to show.");
-    if (r.events.some(function (e) { return e.title.indexOf("Guarded action requested") === 0; })) {
+    if (shown.some(function (e) { return e.title.indexOf("Guarded action requested") === 0; })) {
       notes.push("Each “Guarded action requested” entry and its result come from the same recorded step: the guard's decision and the result were stored together.");
     }
-    if (r.events.some(function (e) { return e.kind === "thought"; })) notes.push("Agent notes are message text the model returned with its tool calls. Private model reasoning was never recorded.");
+    if (shown.some(function (e) { return e.kind === "thought"; })) notes.push("Agent notes are message text the model returned with its tool calls. Private model reasoning was never recorded.");
     if (truncated) notes.push(plural(truncated, "result") + " in this run " + (truncated === 1 ? "was" : "were") + " stored cut to " + DATA.trace_result_limit.toLocaleString("en-US") + " characters, and " + (truncated === 1 ? "is" : "are") + " shown as stored.");
 
     var feed = h("div", {});
-    r.events.forEach(function (e) { add(feed, eventNode(e)); });
-    var expanded = false;
-    var toggle = h("button", { type: "button", class: "btn", text: "Expand all", onclick: function () {
-      expanded = !expanded;
-      feed.querySelectorAll("details").forEach(function (d) { d.open = expanded; });
-      toggle.textContent = expanded ? "Collapse all" : "Expand all";
-    } });
+    shown.forEach(function (e) { add(feed, eventNode(e)); });
+    var modes = h("div", { class: "seg", role: "group", "aria-label": "Activity shown" });
+    if (trimmed) segmented(modes, [["key", "Key steps"], ["all", "All activity"]], state.allActivity ? "all" : "key", function (k) { state.allActivity = k === "all"; renderExplorer(); });
     return [
+      scenarioBrief(caseOf(g, r.case)),
       verdict(g, r),
+      runStats(r),
       stepper(r.lifecycle),
       h("div", { class: "run-grid" },
         h("div", {},
-          h("div", { class: "feed-head" }, h("h3", { text: "Recorded activity, in order" }), r.events.length > 1 ? toggle : null),
+          h("div", { class: "feed-head" }, h("h3", { text: "Recorded activity, in order" }), trimmed ? modes : null),
+          trimmed ? h("p", { class: "muted small", text: "Showing " + shown.length + " of " + plural(r.events.length, "recorded event") + "." }) : null,
           feed,
           notes.map(function (n) { return h("p", { class: "muted small", style: "margin-top:.5rem", text: n }); })),
         h("aside", { class: "side" },
           h("h3", { text: "Symptoms at the start" }),
           r.symptoms.length ? h("ul", { class: "side-text" }, r.symptoms.map(function (s) { return h("li", { text: s }); }))
             : h("p", { class: "side-text", text: r.fault_present ? "None raised, although a fault was present." : "None. The system was healthy." }),
-          h("h3", { text: "This run" }),
-          h("div", { class: "tiles" },
-            miniTile("Steps", r.steps), miniTile("Tool calls", r.tool_calls), miniTile("Actions executed", r.executed),
-            miniTile("Time", r.invoked ? seconds(r.latency_s) : "–"), miniTile("API cost", usd(r.cost_usd)), miniTile("Model calls", r.llm_requests)),
-          r.model_path ? h("p", { class: "muted small", style: "margin-top:.5rem", text: r.model_path + "." }) : null,
+          r.model_path ? h("p", { class: "muted small", text: r.model_path + "." }) : null,
           h("h3", { text: "How it was scored" }),
           kvTable(r.scoring.map(function (s) { return [s.label, s.value]; })),
           r.escalation && r.escalation.summary ? h("div", {}, h("h3", { text: "Escalation summary" }), h("p", { class: "side-text", text: r.escalation.summary })) : null)),
@@ -414,21 +403,33 @@
     var numbers = runsOf(g, x.caseId).map(function (r) { return r.number; }).filter(function (n, i, all) { return all.indexOf(n) === i; }).sort();
     if (numbers.indexOf(x.number) < 0) x.number = numbers[0];
 
-    function options(id, items, current) {
-      var select = fill(id, items.map(function (o) { return h("option", { value: o[0], text: o[1] }); }));
-      select.value = current;
-    }
-    options("x-group", GROUPS.map(function (o) { return [o.key, o.name]; }), x.group);
-    options("x-case", g.cases.map(function (c) { return [c.id, c.title]; }), x.caseId);
-    options("x-run", numbers.map(function (n) { return [n, runLabel(n)]; }), x.number);
+    // The two evaluation groups stay separate inside one scenario list.
+    var select = fill("x-case", GROUPS.map(function (o) {
+      return h("optgroup", { label: o.name }, o.cases.map(function (c) { return h("option", { value: c.id, text: c.title }); }));
+    }));
+    select.value = x.caseId;
+    segmented("x-run", numbers.map(function (n) { return [n, "Run " + n]; }), x.number, function (n) { x.number = n; renderExplorer(); });
     segmented("x-engine", [["agent", "AI Agent"], ["playbook", "Rule-based Playbook"]], x.engine, function (k) { x.engine = k; renderExplorer(); });
 
     var run = g.runs.filter(function (r) { return r.case === x.caseId && r.number === Number(x.number) && r.engine === x.engine; })[0];
     fill("x-output", runBody(g, run));
   }
-  document.getElementById("x-group").addEventListener("change", function (e) { state.x.group = e.target.value; state.x.caseId = null; renderExplorer(); });
-  document.getElementById("x-case").addEventListener("change", function (e) { state.x.caseId = e.target.value; renderExplorer(); });
-  document.getElementById("x-run").addEventListener("change", function (e) { state.x.number = Number(e.target.value); renderExplorer(); });
+  function renderAllRuns() {
+    var g = group(state.allGroup);
+    segmented("all-group", GROUPS.map(function (x) { return [x.key, x.name]; }), state.allGroup, function (k) { state.allGroup = k; renderAllRuns(); });
+    renderRunsTable(g); renderLatency(g); renderInvalid(g);
+  }
+  function renderRuns() {
+    segmented("runs-view", [["explore", "Explore a run"], ["all", "All runs"]], state.view, function (k) { state.view = k; renderRuns(); });
+    document.getElementById("view-explore").hidden = state.view !== "explore";
+    document.getElementById("view-all").hidden = state.view !== "all";
+    if (state.view === "explore") renderExplorer(); else renderAllRuns();
+  }
+  document.getElementById("x-case").addEventListener("change", function (e) {
+    state.x.caseId = e.target.value;
+    state.x.group = GROUPS.filter(function (o) { return caseOf(o, e.target.value); })[0].key;
+    renderExplorer();
+  });
 
   // -------------------------------------------------------------------- methodology
   function renderMethodology() {
@@ -447,7 +448,7 @@
         " for the development runs. With correlated runs and the lead concentrated in scenarios disclosed as favourable, these numbers do not establish a general difference.",
       cost: "The AI Agent averaged " + seconds(pa.latency.mean_s) + " per model-using prospective run (" + Math.round(pa.latency.min_s) + "–" + Math.round(pa.latency.max_s) + " s) and cost " +
         usd(pa.cost_usd) + " in API fees across that evaluation. The Playbook took " + seconds(pb.latency.max_s) + " at no API cost.",
-      tools: "The AI Agent made " + pa.invalid_tool_calls + " invalid read-only queries in the prospective evaluation, listed under the comparison. None changed the system."
+      tools: "The AI Agent made " + pa.invalid_tool_calls + " invalid read-only queries in the prospective evaluation, listed under Recorded runs, All runs. None changed the system."
     };
     document.querySelectorAll("[data-fig]").forEach(function (node) { node.textContent = figures[node.getAttribute("data-fig")]; });
 
@@ -471,14 +472,15 @@
     var g = GROUPS.filter(function (x) { return caseOf(x, m[1]); })[0];
     if (!g) return;
     state.x = { group: g.key, caseId: m[1], number: Number(m[2]), engine: m[3] };
-    renderExplorer();
+    state.view = "explore";
+    renderRuns();
     document.getElementById("runs").scrollIntoView();
   }
   window.addEventListener("hashchange", applyHash);
 
   renderOverview();
   renderComparison();
-  renderExplorer();
+  renderRuns();
   renderMethodology();
   applyHash();
 })();

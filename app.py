@@ -9,8 +9,8 @@ from autoheal_ui import session, theme
 
 ROOT = Path(__file__).resolve().parent
 
-st.set_page_config(page_title="AutoHeal", page_icon=":material/monitor_heart:", layout="wide")
-st.logo(str(ROOT / "assets" / "logo.svg"), size="large")
+st.set_page_config(page_title="AutoHeal", page_icon=str(ROOT / "assets" / "favicon.png"), layout="wide")
+st.logo(str(ROOT / "assets" / "logo.svg"), size="large", icon_image=str(ROOT / "assets" / "icon.svg"))
 theme.inject_css()
 
 page = st.navigation([

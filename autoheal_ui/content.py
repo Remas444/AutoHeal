@@ -66,49 +66,20 @@ def check_label(check: str) -> str:
 
 @dataclass(frozen=True)
 class ScenarioCopy:
+    """What an operator can see before any investigation: never the root cause or the expected repair."""
     title: str
-    what_happens: str
-    what_to_expect: str
+    symptom: str
 
 
 SCENARIO_COPY = {
-    "payment_timeout": ScenarioCopy(
-        "Payments silently dropping orders",
-        "A deploy cuts the payment gateway timeout below real latency. Timeouts are swallowed, so orders stay "
-        "unpaid with no error raised.",
-        "Recoverable: the cause is a configuration change, and stuck orders can be retried once it is reverted.",
-    ),
-    "queue_capacity": ScenarioCopy(
-        "Queue losing messages under load",
-        "A deploy shrinks the fulfilment queue during a traffic spike, so messages overflow into the dead-letter "
-        "store.",
-        "Recoverable: revert the change, then replay the dead letters.",
-    ),
-    "sync_corruption": ScenarioCopy(
-        "Sync job corrupting customer data",
-        "A new CRM field mapping truncates phone numbers, damaging a few customer records every tick.",
-        "Recoverable: revert the mapping, then run a full resynchronisation.",
-    ),
-    "workflow_hang": ScenarioCopy(
-        "Workflow hanging forever",
-        "A workflow holds the billing lock and stops sending heartbeats, so every other workflow queues behind it.",
-        "Recoverable: the stalled lock holder may be terminated because its heartbeat is stale.",
-    ),
-    "gateway_outage": ScenarioCopy(
-        "Upstream payment provider outage",
-        "The external payment provider returns HTTP 503. Nothing inside this system caused it.",
-        "Not recoverable from inside the system: the correct result is an escalation to a human, with no changes made.",
-    ),
-    "combo_payment_queue": ScenarioCopy(
-        "Two overlapping failures",
-        "A payment timeout and a queue shrink overlap during a traffic spike, and repairing one can trigger "
-        "knock-on damage in the other.",
-        "Hard case: the Playbook's fixed rules do not fully clear it here, and independent verification reports "
-        "that. The AI Agent can keep working on what remains.",
-    ),
-    "healthy": ScenarioCopy(
-        "Healthy control",
-        "No fault is injected. This confirms that AutoHeal does nothing when nothing is wrong.",
-        "No action required: no recovery action and no LLM call.",
-    ),
+    "payment_timeout": ScenarioCopy("Orders stuck before payment", "New orders are stuck with no payment recorded."),
+    "queue_capacity": ScenarioCopy("Paid orders not shipping",
+                                   "During a traffic spike, paid orders are landing in the dead-letter store."),
+    "sync_corruption": ScenarioCopy("Customer records out of sync", "Customer records no longer match the CRM source."),
+    "workflow_hang": ScenarioCopy("Workflows piling up", "Workflows are waiting in line and not moving forward."),
+    "gateway_outage": ScenarioCopy("Payments failing", "Recent orders are ending in payment failure."),
+    "combo_payment_queue": ScenarioCopy("Orders stuck and not shipping",
+                                        "During a traffic spike, orders are stuck before payment and paid orders are "
+                                        "not shipping."),
+    "healthy": ScenarioCopy("Healthy control", "Normal traffic with no fault injected."),
 }

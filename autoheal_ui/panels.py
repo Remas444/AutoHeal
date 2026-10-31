@@ -14,6 +14,8 @@ TONE_ICONS = {"info": ":material/radio_button_checked:", "success": ":material/c
               "warning": ":material/warning:", "danger": ":material/error:"}
 _DISPLAY_LIMIT = 6000
 _STAGE_NAMES = {"Outcome": "Resolve / Escalate"}
+_EFFECT_WORDS = {EXECUTED: "Executed", REJECTED: "Blocked", REFUSED: "Refused", DRY_RUN: "Dry run, not executed",
+                 TOOL_FAILED: "Failed"}
 
 
 def _show_payload(label: str, value: Any) -> None:
@@ -70,11 +72,63 @@ def _symptom_table(items: list[dict]) -> None:
              hide_index=True, alt="Detected symptoms")
 
 
+def _verification_result(report: dict, status: str | None) -> None:
+    checks = report.get("verifications") or []
+    if not checks:
+        st.caption({None: "Not run yet.", "healthy": "Not run: no action was taken."}.get(status, "Did not run for this incident."))
+        return
+    for n, v in enumerate(checks, 1):
+        verdict = "Passed" if v.get("passed") else "Failed"
+        attempt = f"Attempt {n}: {verdict}" if len(checks) > 1 else verdict
+        st.markdown(f"**{attempt}.** {v.get('probe_fulfilled')}/{v.get('probe_orders')} probe orders fulfilled over "
+                    f"{v.get('ticks_run')} ticks.")
+        if v.get("findings"):
+            _symptom_table(v["findings"])
+    st.caption("Plain code sends probe orders through the real pipeline and re-runs every health check. It does not rely "
+               "on the recovery engine's own claim.")
+
+
+def _incident_summary(report: dict, events: list[ActivityEvent], status: str | None) -> None:
+    with st.container(border=True):
+        st.markdown("**:material/troubleshoot: Root cause**")
+        causes = report.get("root_causes") or []
+        suspected = (report.get("escalation") or {}).get("suspected_categories")
+        for rc in causes:
+            st.markdown(f"**{_plain(str(rc.get('category', 'unknown')).replace('_', ' ').capitalize())}**: "
+                        f"{_plain(rc.get('cause', ''))}")
+        if not causes and suspected:
+            cats = ", ".join(c.replace("_", " ") for c in suspected)
+            st.markdown(f"Not established. Suspected categories named in the escalation: **{_plain(cats)}**.")
+        elif not causes:
+            st.caption({None: "Not established yet.", "healthy": "No fault to diagnose."}.get(status, "No root cause has been established."))
+
+    with st.container(border=True):
+        st.markdown("**:material/build: Recovery action**")
+        taken = [e for e in events if e.effect]
+        for e in taken:
+            detail = f" {_plain(e.summary)}" if e.summary else ""
+            st.markdown(f"- **{ACTION_TITLES.get(e.tool or '', e.tool)}**: {_EFFECT_WORDS[e.effect]}.{detail}")
+        if not taken:
+            st.caption("No state-changing action was requested.")
+
+    with st.container(border=True):
+        st.markdown("**:material/verified: Verification result**")
+        _verification_result(report, status)
+
+    if report.get("escalation"):
+        st.caption("Handed to a human: see the Escalation tab.")
+    elif report.get("summary"):
+        st.markdown(_plain(report["summary"]))
+
+
 def incident_detail(report: dict, events: list[ActivityEvent], approvals: list[dict],
-                    findings: list[dict] | None = None, outcome: Outcome | None = None) -> None:
-    """Symptoms, evidence, diagnosis, actions, guardrail decisions, verification and final disposition."""
-    symptoms, evidence, diagnosis, actions, verification = st.tabs(
-        ["Symptoms", "Evidence", "Root cause", "Actions", "Result"])
+                    findings: list[dict] | None = None, status: str | None = None) -> None:
+    """Root cause, recovery action and verification first; symptoms, evidence, actions and escalation one tab away."""
+    summary, symptoms, evidence, actions, escalation = st.tabs(
+        ["Summary", "Symptoms", "Evidence", "Action history", "Escalation"])
+
+    with summary:
+        _incident_summary(report, events, status)
 
     with symptoms:
         items = report.get("findings") or findings or []
@@ -84,6 +138,17 @@ def incident_detail(report: dict, events: list[ActivityEvent], approvals: list[d
             st.caption("No symptoms detected.")
 
     with evidence:
+        causes = report.get("root_causes") or []
+        for rc in causes:
+            with st.container(border=True):
+                st.markdown(f"**{_plain(str(rc.get('category', 'unknown')).replace('_', ' ').capitalize())}**: "
+                            f"{_plain(rc.get('cause', ''))}")
+                for ev in rc.get("evidence", []):
+                    st.markdown(f"- {_plain(ev)}")
+                st.caption(f"Fix applied: {_plain(rc.get('fix_applied', ''))}")
+        if causes and report.get("confidence") is not None:
+            st.caption(f"Confidence reported by the recovery engine: {report['confidence']:.0%}. Recovery is judged "
+                       "by independent verification, not by this figure.")
         reads = [e for e in events if e.kind == "observe"]
         if not reads:
             st.caption("No investigation was recorded for this incident. The rule-based Playbook applies fixed rules "
@@ -94,32 +159,11 @@ def incident_detail(report: dict, events: list[ActivityEvent], approvals: list[d
                      hide_index=True, alt="Evidence collected by read-only tools")
             st.caption("Open an event in Agent Activity to see its full result.")
 
-    with diagnosis:
-        causes = report.get("root_causes") or []
-        if causes:
-            for rc in causes:
-                with st.container(border=True):
-                    st.markdown(f"**{_plain(str(rc.get('category', 'unknown')).replace('_', ' ').capitalize())}**: "
-                                f"{_plain(rc.get('cause', ''))}")
-                    for ev in rc.get("evidence", []):
-                        st.markdown(f"- {_plain(ev)}")
-                    st.caption(f"Fix applied: {_plain(rc.get('fix_applied', ''))}")
-            if report.get("confidence") is not None:
-                st.caption(f"Confidence reported by the recovery engine: {report['confidence']:.0%}. Recovery is judged "
-                           "by independent verification, not by this figure.")
-        elif (report.get("escalation") or {}).get("suspected_categories"):
-            cats = ", ".join(c.replace("_", " ") for c in report["escalation"]["suspected_categories"])
-            st.markdown(f"Not established. Suspected categories named in the escalation: **{_plain(cats)}**.")
-        else:
-            st.caption("No root cause has been established.")
-
     with actions:
         taken = [e for e in events if e.effect]
         if taken:
-            words = {EXECUTED: "Executed", REJECTED: "Blocked", REFUSED: "Refused", DRY_RUN: "Dry run, not executed",
-                     TOOL_FAILED: "Failed"}
             st.table(pd.DataFrame([{"Step": e.step, "Action": ACTION_TITLES.get(e.tool or "", e.tool),
-                                    "Guardrail decision": words[e.effect], "Detail": e.summary} for e in taken]),
+                                    "Guardrail decision": _EFFECT_WORDS[e.effect], "Detail": e.summary} for e in taken]),
                      hide_index=True, alt="Recovery actions and guardrail decisions")
         else:
             st.caption("No state-changing action was requested.")
@@ -134,24 +178,9 @@ def incident_detail(report: dict, events: list[ActivityEvent], approvals: list[d
         else:
             st.caption("No human approval was requested for this incident.")
 
-    with verification:
-        checks = report.get("verifications") or []
-        if checks:
-            for n, v in enumerate(checks, 1):
-                verdict = "Passed" if v.get("passed") else "Failed"
-                st.markdown(f"**Verification {n}: {verdict}.** {v.get('probe_fulfilled')}/{v.get('probe_orders')} probe "
-                            f"orders fulfilled over {v.get('ticks_run')} ticks.")
-                if v.get("findings"):
-                    _symptom_table(v["findings"])
-            st.caption("Verification is plain code: it sends probe orders through the real pipeline and re-runs every "
-                       "health check. It does not rely on the recovery engine's own claim.")
-        else:
-            st.caption("Independent verification did not run for this incident.")
+    with escalation:
         e = report.get("escalation")
-        if outcome:
-            st.markdown(f"**Final outcome: {outcome.label}.**")
         if e:
-            st.markdown("**Escalation details**")
             if e.get("summary"):
                 st.markdown(_plain(e["summary"]))
             for action in e.get("recommended_actions", []):
@@ -161,5 +190,5 @@ def incident_detail(report: dict, events: list[ActivityEvent], approvals: list[d
                 _symptom_table(e["open_symptoms"])
             elif e.get("open_symptoms") == []:
                 st.caption("No symptoms were open at handover.")
-        elif report.get("summary"):
-            st.markdown(_plain(report["summary"]))
+        else:
+            st.caption("This incident has not been escalated to a human.")

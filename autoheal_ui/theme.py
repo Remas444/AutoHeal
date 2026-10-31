@@ -2,8 +2,10 @@
 Streamlit has no native element for (the lifecycle stepper, status tiles, outcome banner), using its own class names."""
 from __future__ import annotations
 
+from base64 import b64encode
 from dataclasses import dataclass
 from html import escape
+from pathlib import Path
 
 import streamlit as st
 
@@ -12,6 +14,8 @@ from .activity import STATE_LABELS, Outcome, Stage
 CSS = """
 <style>
 .stMainBlockContainer { padding-top: 1.75rem; padding-bottom: 3rem; }
+/* With the sidebar collapsed, the logo sits in a header over the page: keep the title clear of it. */
+body:has([data-testid="stSidebar"][aria-expanded="false"]) .stMainBlockContainer { padding-top: 4rem; }
 
 /* Readable active states on the dark surface. If Streamlit renames these, the theme's primary colour still applies. */
 [data-testid="stTab"][aria-selected="true"], [data-testid="stTab"][aria-selected="true"] * { color: #7FD3CF; }
@@ -24,6 +28,8 @@ button[data-variant="pills"][data-selected="true"], button[data-variant="pills"]
 [class*="-tone-info-"] [data-testid="stIconMaterial"] { color: #5EC4C0; }
 
 .ah-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 1.5rem; margin-bottom: .25rem; }
+.ah-title { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.ah-title img { flex: none; display: block; }
 .ah-hero h1 { font-size: 1.75rem; font-weight: 650; letter-spacing: -.015em; margin: 0; padding: 0; line-height: 1.2; color: #E6EBF2; }
 .ah-hero p { margin: .25rem 0 0; color: #A9B5C6; font-size: .95rem; }
 .ah-tag { display: inline-block; font-size: .75rem; font-weight: 600; letter-spacing: .02em; padding: .25rem .6rem; border-radius: 6px; border: 1px solid #2E5E66; color: #7FD3CF; background: #10232C; white-space: nowrap; }
@@ -75,6 +81,8 @@ button[data-variant="pills"][data-selected="true"], button[data-variant="pills"]
 </style>
 """
 
+_MARK = "data:image/svg+xml;base64," + b64encode((Path(__file__).resolve().parent.parent / "assets" / "icon.svg").read_bytes()).decode()
+
 _STATE_GLYPH = {"completed": "✓", "active": "•", "failed": "×", "blocked": "!", "escalated": "!",
                 "skipped": "–", "pending": ""}
 
@@ -92,7 +100,8 @@ def inject_css() -> None:
 
 
 def hero(title: str, subtitle: str, tag: str = "Simulation Environment") -> None:
-    st.html(f'<div class="ah-hero"><div><h1>{escape(title)}</h1><p>{escape(subtitle)}</p></div>'
+    st.html(f'<div class="ah-hero"><div class="ah-title"><img src="{_MARK}" alt="" width="44" height="44">'
+            f'<div><h1>{escape(title)}</h1><p>{escape(subtitle)}</p></div></div>'
             f'<span class="ah-tag">{escape(tag)}</span></div>')
 
 

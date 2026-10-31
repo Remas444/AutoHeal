@@ -31,14 +31,14 @@
     <h1 id="h-overview">When does AI-driven recovery add value over deterministic rules?</h1>
     <p class="lede" id="answer"></p>
     <p class="notice"><strong>Recorded results, read-only.</strong> Nothing on this site runs a model, a recovery or a benchmark.
-      Every figure is computed from the committed result files. To run AutoHeal itself, use the Operations Console.</p>
+      Every figure is computed from the committed result files.</p>
 
     <div class="groups" id="group-cards"></div>
 
     <div class="legend-block">
       <h2 class="h3">Correct outcomes are not the same as full recoveries</h2>
       <p class="muted">A correct outcome is whatever the scenario called for: a verified recovery, a correct escalation, a partial
-        recovery with escalation, or correctly doing nothing. The bars above show how each total is made up.</p>
+        recovery with escalation, or correctly doing nothing.</p>
       <div class="legend" id="outcome-legend"></div>
     </div>
 
@@ -47,15 +47,13 @@
   </section>
 
   <section id="comparison" class="wrap section" aria-labelledby="h-comparison">
-    <h2 id="h-comparison">Benchmark comparison</h2>
-    <p class="muted intro">The same scenarios, starting states, tools, safety controls and independent verification for both systems.
-      Open any scenario to see what it tests and to reach its recorded runs.</p>
+    <h2 id="h-comparison">AI Agent vs Rule-based Playbook</h2>
+    <p class="muted intro">Same scenarios, starting states, tools, safety controls and independent verification. Select a scenario to see what it tests and its recorded runs.</p>
 
     <div class="controls">
       <div class="seg" role="group" aria-label="Evaluation group" id="compare-group"></div>
-      <div class="pills" role="group" aria-label="Filter scenarios" id="compare-filter"></div>
     </div>
-    <p class="muted group-note" id="compare-note"></p>
+    <p class="muted group-note" id="compare-note" hidden></p>
 
     <table class="matrix" id="matrix">
       <caption class="sr">Results by scenario for both systems</caption>
@@ -71,44 +69,53 @@
       <tbody id="metrics-body"></tbody>
     </table>
     <p class="muted small" id="metrics-note"></p>
+  </section>
 
-    <details class="panel" id="invalid-panel">
-      <summary>Invalid tool calls by the AI Agent</summary>
-      <p class="muted">A genuine tool-use limitation: the model wrote read-only queries with a wrong column or query shape. Each was
-        rejected without any effect on the system.</p>
-      <div id="invalid-list"></div>
-    </details>
+  <section id="runs" class="wrap section" aria-labelledby="h-runs">
+    <h2 id="h-runs">Recorded runs</h2>
+    <p class="notice"><strong>A replay of recorded evidence, not a new execution.</strong> Each entry is what the evaluated run stored.
+      Gaps in a record are left as gaps.</p>
 
-    <h3>Time to finish, per recorded run</h3>
-    <div class="chart" id="latency-chart"></div>
-    <p class="muted small">Runs where the engine was invoked. Playbook runs finish almost at once, so their points overlap. Select a point to open that run.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Recorded runs view" id="runs-view"></div>
+    </div>
 
-    <details class="panel">
-      <summary>Every recorded run, as a table</summary>
+    <div id="view-explore">
+      <div class="selectors">
+        <label>Scenario<select id="x-case"></select></label>
+        <div class="field"><span class="field-label">Recorded run</span><div class="seg" role="group" aria-label="Recorded run" id="x-run"></div></div>
+        <div class="field"><span class="field-label">Recovery engine</span><div class="seg" role="group" aria-label="Recovery engine" id="x-engine"></div></div>
+      </div>
+      <div id="x-output"></div>
+    </div>
+
+    <div id="view-all" hidden>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Evaluation group for all runs" id="all-group"></div>
+      </div>
       <div class="scroll"><table class="runs-table">
         <thead><tr><th scope="col">Scenario</th><th scope="col">Run</th><th scope="col">Engine</th><th scope="col">Outcome</th><th scope="col">Correct</th>
           <th scope="col" class="num">Steps</th><th scope="col" class="num">Tool calls</th><th scope="col" class="num">Actions</th><th scope="col" class="num">Time</th><th scope="col" class="num">API cost</th></tr></thead>
         <tbody id="runs-body"></tbody>
       </table></div>
-    </details>
-  </section>
 
-  <section id="runs" class="wrap section" aria-labelledby="h-runs">
-    <h2 id="h-runs">Recorded runs</h2>
-    <p class="notice"><strong>A replay of recorded evidence, not a new execution.</strong> Each step below is what the evaluated
-      run stored. Nothing is running, and gaps in a record are left as gaps.</p>
+      <h3>Time to finish, per recorded run</h3>
+      <div class="chart" id="latency-chart"></div>
+      <p class="muted small">Runs where the engine was invoked. Playbook runs finish almost at once, so their points overlap. Select a point to open that run.</p>
 
-    <div class="selectors">
-      <label>Evaluation group<select id="x-group"></select></label>
-      <label>Scenario<select id="x-case"></select></label>
-      <label>Recorded run<select id="x-run"></select></label>
-      <div class="field"><span class="field-label">Recovery engine</span><div class="seg" role="group" aria-label="Recovery engine" id="x-engine"></div></div>
+      <div id="invalid-panel">
+        <h3>Invalid tool calls by the AI Agent</h3>
+        <p class="muted">A genuine tool-use limitation: the model wrote read-only queries with a wrong column or query shape. Each was
+          rejected without any effect on the system.</p>
+        <div id="invalid-list"></div>
+      </div>
     </div>
-    <div id="x-output"></div>
   </section>
 
   <section id="methodology" class="wrap section" aria-labelledby="h-method">
     <h2 id="h-method">Methodology, data and limitations</h2>
+
+    <p class="muted intro">Each registered scenario and seed ran once, with no reruns and no code changes between runs. Hidden checks that neither engine can see score the result.</p>
 
     <div class="callout">
       <h3>Where the data comes from</h3>
@@ -119,7 +126,34 @@
       <p>The language models were used only for <strong>inference and tool calling</strong>. They were not trained or fine-tuned on this data.</p>
     </div>
 
-    <details class="panel" open>
+    <div class="callout warn">
+      <h3>Limitations to keep in mind</h3>
+      <ul>
+        <li><strong>Same authors.</strong> Prospective scenarios were written by the team that developed the agent, after inspecting this simulator. They are not independently designed real-world unseen failures.</li>
+        <li><strong>Designer bias.</strong> <span data-fig="bias"></span> Some detection and decision thresholds were tuned with earlier scenarios in view.</li>
+        <li><strong>Small, correlated samples.</strong> <span data-fig="sample"></span></li>
+        <li><strong>No claim of statistical significance.</strong> <span data-fig="stats"></span></li>
+        <li><strong>Simulation.</strong> The backend, faults and hidden checks are hand-built. Results do not transfer to arbitrary production systems.</li>
+        <li><strong>Latency and cost.</strong> <span data-fig="cost"></span></li>
+        <li><strong>Tool failures.</strong> <span data-fig="tools"></span></li>
+        <li><strong>Detection gap.</strong> Both systems share one detector, which misses backlogs that grow intermittently.</li>
+      </ul>
+    </div>
+
+    <div class="doc-links">
+      <h3>Supporting documents</h3>
+      <ul>
+        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/FINAL_EVALUATION_v321.md">Final evaluation report</a></li>
+        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_PLAN_v321.md">Registered evaluation plan</a></li>
+        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_NOTES.md">Evaluation notes and errata</a></li>
+        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/VERIFICATION.md">Verification and checksums</a></li>
+        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteB-prospective.json">Prospective results file</a></li>
+        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteA-regression.json">Development and regression results file</a></li>
+      </ul>
+    </div>
+
+    <h3>Full method and provenance</h3>
+    <details class="panel">
       <summary>How the simulated environment works</summary>
       <p>The simulation advances in <strong>ticks</strong>, one step of simulated time, and stores its state in a SQLite database.</p>
       <dl class="defs">
@@ -168,37 +202,11 @@
       </dl>
     </details>
 
-    <div class="callout warn">
-      <h3>Limitations to keep in mind</h3>
-      <ul>
-        <li><strong>Same authors.</strong> Prospective scenarios were written by the team that developed the agent, after inspecting this simulator. They are not independently designed real-world unseen failures.</li>
-        <li><strong>Designer bias.</strong> <span data-fig="bias"></span> Some detection and decision thresholds were tuned with earlier scenarios in view.</li>
-        <li><strong>Small, correlated samples.</strong> <span data-fig="sample"></span></li>
-        <li><strong>No claim of statistical significance.</strong> <span data-fig="stats"></span></li>
-        <li><strong>Simulation.</strong> The backend, faults and hidden checks are hand-built. Results do not transfer to arbitrary production systems.</li>
-        <li><strong>Latency and cost.</strong> <span data-fig="cost"></span></li>
-        <li><strong>Tool failures.</strong> <span data-fig="tools"></span></li>
-        <li><strong>Detection gap.</strong> Both systems share one detector, which misses backlogs that grow intermittently.</li>
-      </ul>
-    </div>
-
     <details class="panel">
       <summary>Provenance and source files</summary>
       <p class="muted">Internal names and versions, for reviewers. Each run's full original record is available under its technical details.</p>
       <div id="provenance"></div>
     </details>
-
-    <div class="doc-links">
-      <h3>Supporting documents</h3>
-      <ul>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/FINAL_EVALUATION_v321.md">Final evaluation report</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_PLAN_v321.md">Registered evaluation plan</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_NOTES.md">Evaluation notes and errata</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/VERIFICATION.md">Verification and checksums</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteB-prospective.json">Prospective results file</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteA-regression.json">Development and regression results file</a></li>
-      </ul>
-    </div>
   </section>
 </main>
 

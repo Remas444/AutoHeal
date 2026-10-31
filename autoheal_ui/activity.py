@@ -449,32 +449,3 @@ def classify_outcome(report: dict, events: Iterable[ActivityEvent] = ()) -> Outc
                        f"Recovery actions ran without clearing the symptoms, so a human takes over. {reason}")
     return Outcome("escalated", "Escalated without automatic recovery", "warning",
                    f"No state-changing action was taken. {reason}")
-
-
-# ------------------------------------------------------------------ guidance
-@dataclass(frozen=True)
-class NextStep:
-    title: str
-    detail: str
-
-
-def next_step(running: bool, symptoms: int, injected: str | None, incident_status: str | None) -> NextStep:
-    if running:
-        return NextStep("Recovery in progress", "Follow it in Agent Activity. You can browse other pages meanwhile.")
-    if incident_status in ("resolved", "healthy"):
-        return NextStep("Review the result", "Read the outcome and incident details, then click Reset to try another "
-                                             "scenario.")
-    if incident_status == "escalated":
-        return NextStep("Review the escalation", "See what was handed to a human, then click Reset to try another "
-                                                 "scenario.")
-    if symptoms:
-        return NextStep("Next: click Start Recovery", "Symptoms are active. AutoHeal will work on them and verify the "
-                                                      "result independently.")
-    if injected == "healthy":
-        return NextStep("Next: click Start Recovery", "No fault was injected, so AutoHeal should confirm that no action "
-                                                      "is required.")
-    if injected:
-        return NextStep("Next: click Generate Test Traffic", "The fault has not produced symptoms yet. Traffic gives it "
-                                                             "a chance to appear.")
-    return NextStep("Start here: choose a scenario, then click Inject Fault", "The fault runs against a simulated shop, "
-                                                                             "never a real system.")

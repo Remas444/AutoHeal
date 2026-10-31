@@ -11,7 +11,7 @@ from autoheal.runtime import build_llm, open_ledger, open_system, run_scenario
 from autoheal.scenarios import SCENARIOS, setup_scenario
 from autoheal_ui import recovery
 from autoheal_ui.activity import (ACTIVE, BLOCKED, COMPLETED, ESCALATED, FAILED, PENDING, SKIPPED, ActivityEvent, ActivityLog,
-                                  classify_outcome, derive_lifecycle, incident_events, next_step, replay)
+                                  classify_outcome, derive_lifecycle, incident_events, replay)
 from autoheal_ui.evaluation_data import load_suite, recorded_escalation
 
 
@@ -348,14 +348,3 @@ def test_recorded_p05_tells_the_partial_recovery_story():
     assert "Recovery action executed: Roll back configuration" in titles
     assert any(t.startswith("Reading health report") for t in titles)
     assert titles[-1] == "Escalation issued to a human operator"
-
-
-# ---------------------------------------------------------------- guidance
-def test_next_step_guides_each_state():
-    assert "Inject Fault" in next_step(False, 0, None, None).title
-    assert "Start Recovery" in next_step(False, 2, "payment_timeout", None).title
-    assert "Start Recovery" in next_step(False, 0, "healthy", None).title
-    assert "Generate Test Traffic" in next_step(False, 0, "sync_corruption", None).title
-    assert "progress" in next_step(True, 2, "payment_timeout", None).title
-    assert "Review" in next_step(False, 0, "payment_timeout", "resolved").title
-    assert "escalation" in next_step(False, 1, "gateway_outage", "escalated").title

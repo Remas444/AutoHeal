@@ -140,7 +140,7 @@ pip install -r requirements.txt
 ```powershell
 pytest
 ```
-Expected: `397 passed, 29 skipped`. This covers the simulator, tools, guards, verifier, budget logic, agent loop,
+Expected: `406 passed, 29 skipped`. This covers the simulator, tools, guards, verifier, budget logic, agent loop,
 evaluation harnesses, the console, the evidence site's data and the integrity of the included final evidence. The 29 skipped checks need historical result
 files or the original Git history, which are kept in the private development repository; each skip
 prints its reason, and [docs/VERIFICATION.md](docs/VERIFICATION.md) lists them.
@@ -158,8 +158,8 @@ Expected: the first ends **RESOLVED** with verification passed; the outage ends 
 streamlit run app.py
 ```
 - **Operations:** choose a scenario and a recovery engine, click **Inject Fault**, then **Start Recovery**, and follow the
-  lifecycle and Agent Activity as events arrive. Open any event for its tool, arguments and result. The Rule-based
-  Playbook works without a key.
+  lifecycle and Agent Activity as events arrive. Open any event for its tool, arguments and result. **Reset** returns to
+  the clean, healthy state. The Rule-based Playbook works without a key.
 - **System Insights:** health checks, metrics, queue conditions, logs and configuration history. It updates by itself
   while a recovery runs.
 - **Safety & Audit:** human approvals, guardrails, the action record and Session Usage. **Advanced settings** holds the
@@ -181,7 +181,7 @@ A read-only static website for the recorded results: the two evaluation groups s
 run (with its lifecycle, tool calls, safety decisions and verification), and the methodology, data origin and limitations.
 It runs no model, recovery or benchmark.
 
-Planned address, once GitHub Pages is enabled: `https://remas444.github.io/AutoHeal/`
+Live at <https://remas444.github.io/AutoHeal/>.
 
 **Preview locally.** Open `evidence-site/index.html` in a browser, or serve it:
 ```powershell
@@ -189,7 +189,7 @@ python -m http.server 8000 --directory evidence-site
 ```
 then open <http://localhost:8000/>.
 
-**Publish.** In the repository's **Settings > Pages**, set **Source** to **GitHub Actions**. After that,
+**Publish.** With **Source** set to **GitHub Actions** in the repository's **Settings > Pages**,
 [`.github/workflows/deploy-evidence-site.yml`](.github/workflows/deploy-evidence-site.yml) publishes `evidence-site/`, and
 nothing else, on each push to `main` that changes the site or results. It can also be started from the **Actions** tab.
 GitHub Pages on a private repository needs a paid GitHub plan, and the site's document links only work for visitors if the
