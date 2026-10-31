@@ -10,7 +10,3 @@ data/model_prices.json
 data/eval/*
 !data/eval/v321-suiteA-regression.json
 !data/eval/v321-suiteB-prospective.json
-# AI coding-assistant context is not part of the project
-CLAUDE.md
-.claude/
-.agents/
