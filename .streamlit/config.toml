@@ -1,0 +1,44 @@
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "dark"
+primaryColor = "#0E7C7B"
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#131C2E"
+textColor = "#E6EBF2"
+linkColor = "#5EC4C0"
+linkUnderline = false
+borderColor = "#25324A"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "8px"
+buttonRadius = "8px"
+baseFontSize = 15
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+codeFontSize = "0.82rem"
+codeBackgroundColor = "#0E1626"
+headingFontSizes = ["26px", "20px", "16px", "15px", "14px", "13px"]
+headingFontWeights = [650, 600, 600, 600, 600, 600]
+
+greenColor = "#3FB58F"
+orangeColor = "#D9A441"
+redColor = "#E5645B"
+blueColor = "#6FA8DC"
+grayColor = "#93A1B5"
+
+dataframeBorderColor = "#25324A"
+dataframeHeaderBackgroundColor = "#182338"
+dataframeHeaderTextColor = "#C7D0DD"
+
+# Validated for colour-vision separation and contrast against the card surface #131C2E.
+chartCategoricalColors = ["#17A398", "#8F7CF0", "#D9628A", "#3B8EE6"]
+
+[theme.sidebar]
+backgroundColor = "#0E1626"
+secondaryBackgroundColor = "#182338"
+borderColor = "#25324A"
