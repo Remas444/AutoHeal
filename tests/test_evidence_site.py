@@ -277,9 +277,9 @@ def test_expanders_are_few_and_never_nested():
     parser = _Details()
     parser.feed((SITE / "index.html").read_text(encoding="utf-8"))
     assert parser.total == 4 and parser.deepest == 1
-    # A recorded event and a run's technical details: neither is placed inside another expander.
+    # A recorded event, a scenario summary, an escalation summary and technical details: none sits inside another.
     script = (SITE / "app.js").read_text(encoding="utf-8")
-    assert script.count('h("details"') == 2
+    assert script.count('h("details"') == 4
     technical = script[script.index("function technical("):script.index("function runBody(")]
     assert technical.count('h("details"') == 1 and "eventNode" not in technical
 
@@ -289,8 +289,11 @@ def test_every_detail_stays_reachable_from_a_secondary_view():
     for view in ('id="view-all"', 'id="runs-body"', 'id="latency-chart"', 'id="invalid-list"', 'id="provenance"'):
         assert view in html, view
     script = (SITE / "app.js").read_text(encoding="utf-8")
-    for control in ("All activity", "Show original record", "Download this record", "JSON.stringify(r.raw, null, 2)"):
+    for control in ("All activity", "Show original record", "Download this record", "JSON.stringify(r.raw, null, 2)",
+                    "Scenario summary", "Escalation summary", '["Steps", r.steps]', '["Model calls", r.llm_requests]'):
         assert control in script, control
+    body = script[script.index("function runBody("):script.index("function renderExplorer(")]
+    assert body.index("verdict(r)") < body.index("runStats(r)") < body.index("scenarioBrief(") < body.index('"Recorded activity"')
 
 
 def test_key_steps_hide_only_supporting_events(data):
@@ -298,7 +301,7 @@ def test_key_steps_hide_only_supporting_events(data):
     hidden = set(re.findall(r"(\w+): 1", re.search(r"SUPPORTING_EVENTS = \{(.*?)\}", script).group(1)))
     assert hidden == {"observe", "route", "thought", "nudge"}
     assert 'e.kind === "action" && e.stage === "Decide"' in script
-    assert '"Showing " + shown.length + " of "' in script  # the reader is told when events are hidden
+    assert '"All activity (" + r.events.length + ")"' in script  # the reader can see how much more was recorded
     for _, run in _all_runs(data):
         for i, event in enumerate(run["events"]):
             if event["kind"] == "action" and event["stage"] == "Decide":  # a request is only hidden next to its execution

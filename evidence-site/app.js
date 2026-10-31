@@ -303,34 +303,34 @@
     if (parts.length === 1 && body.length === 1) return h("div", { class: tone }, h("div", { class: "ev-row" }, row));  // nothing more was recorded
     return h("details", { class: tone }, h("summary", { class: "ev-row" }, row), h("div", { class: "ev-body" }, body));
   }
-  function verdict(g, r) {
-    var meaning = DATA.outcomes[r.outcome].meaning;
-    var explain = r.outcome === "wrong_diagnosis" && r.status === "resolved"
-      ? meaning + " The run closed itself as resolved and passed verification; the scoring is stricter than that."
-      : meaning;
+  function verdict(r) {
     return h("div", { class: "verdict tone-" + r.tone, role: "status" },
       h("div", { class: "t", text: r.outcome_label }),
-      h("div", { class: "e", text: explain }),
+      h("div", { class: "e", text: DATA.outcomes[r.outcome].meaning }),
       h("div", { class: "s" }, r.correct ? h("span", { class: "mark-ok", text: "✓ Scored correct" }) : h("span", { class: "mark-no", text: "× Scored not correct" }),
         " for this scenario."));
   }
   function stepper(stages) {
     return h("div", { class: "stepper", role: "list", "aria-label": "Recorded lifecycle" }, stages.map(function (s) {
-      return h("div", { class: "step " + s.state, role: "listitem" },
+      // One supporting line: the dot already shows the state, so "Completed" alone adds nothing.
+      var line = s.detail || (s.state === "completed" ? "" : s.state_label);
+      return h("div", { class: "step " + s.state, role: "listitem", "aria-label": s.name + ": " + s.state_label + (s.detail ? ", " + s.detail : "") },
         h("div", { class: "dot", "aria-hidden": "true", text: GLYPH[s.state] }),
-        h("div", { class: "n", text: s.name }), h("div", { class: "s", text: s.state_label }), s.detail ? h("div", { class: "d", text: s.detail }) : null);
+        h("div", { class: "n", text: s.name }), line ? h("div", { class: "d", title: line, text: line }) : null);
     }));
   }
   function scenarioBrief(c) {
-    return h("div", { class: "brief" },
-      h("div", {}, h("h4", { text: "What happens" }), h("p", { text: c.what })),
-      h("div", {}, h("h4", { text: "Correct result" }), h("p", { text: c.correct })),
-      c.why ? h("div", {}, h("h4", { text: "Why the results differ" }), h("p", { text: c.why })) : null,
-      c.bias ? h("div", {}, h("h4", { text: "Bias disclosed before running" }), h("p", { text: c.bias })) : null);
+    return h("details", { class: "panel" },
+      h("summary", {}, "Scenario summary"),
+      h("div", { class: "brief" },
+        h("div", {}, h("h4", { text: "What happens" }), h("p", { text: c.what })),
+        h("div", {}, h("h4", { text: "Correct result" }), h("p", { text: c.correct })),
+        c.why ? h("div", {}, h("h4", { text: "Why the results differ" }), h("p", { text: c.why })) : null,
+        c.bias ? h("div", {}, h("h4", { text: "Bias disclosed before running" }), h("p", { text: c.bias })) : null));
   }
   function runStats(r) {
-    return h("dl", { class: "stats" }, [["Steps", r.steps], ["Tool calls", r.tool_calls], ["Actions executed", r.executed],
-      ["Time", r.invoked ? seconds(r.latency_s) : "–"], ["API cost", usd(r.cost_usd)], ["Model calls", r.llm_requests]].map(function (s) {
+    return h("dl", { class: "stats" }, [["Time", r.invoked ? seconds(r.latency_s) : "–"], ["API cost", usd(r.cost_usd)],
+      ["Tool calls", r.tool_calls], ["Actions executed", r.executed]].map(function (s) {
       return h("div", {}, h("dt", { text: s[0] }), h("dd", { text: s[1] }));
     }));
   }
@@ -346,9 +346,11 @@
       show.textContent = showing ? "Show original record" : "Hide original record";
     } });
     return h("details", { class: "panel" },
-      h("summary", {}, "Technical details and original record"),
-      kvTable([["Scenario identifier", r.case], ["Original seed", r.seed], ["Engine identifier", r.raw.agent], ["Recorded outcome", r.outcome], ["Recorded status", r.status],
-               ["Original scenario title", r.raw.title], ["Source file", file], ["Position in its results list", r.source_index]]),
+      h("summary", {}, "Technical details"),
+      kvTable([["Steps", r.steps], ["Model calls", r.llm_requests]].concat(r.model_path ? [["Models used", r.model_path]] : []).concat(
+              [["Scenario identifier", r.case], ["Original seed", r.seed], ["Engine identifier", r.raw.agent], ["Recorded outcome", r.outcome], ["Recorded status", r.status],
+               ["Original scenario title", r.raw.title], ["Source file", file], ["Position in its results list", r.source_index]])),
+      r.engine === "playbook" ? h("p", { class: "muted small", style: "margin-top:.6rem", text: "Rule-based recovery makes no model calls and does not investigate. Any model name in its original record is routing bookkeeping." }) : null,
       h("div", { class: "actions" }, show,
         h("button", { type: "button", class: "btn", text: "Download this record", onclick: function () {
           var blob = new Blob([JSON.stringify(r.raw, null, 2)], { type: "application/json" });
@@ -361,40 +363,36 @@
     var key = r.events.filter(isKeyEvent);
     var trimmed = key.length < r.events.length;
     var shown = trimmed && !state.allActivity ? key : r.events;
-    var truncated = shown.filter(function (e) { return e.truncated; }).length;
     var notes = [];
-    if (r.engine === "playbook") notes.push("Rule-based recovery makes no model calls and does not investigate. Any model name in its original record is routing bookkeeping.");
-    if (!r.invoked && r.fault_present) notes.push("The fault was present, but no health check raised a symptom, so nothing was invoked. There are no tool calls to show.");
-    if (!r.invoked && !r.fault_present) notes.push("The system was healthy and no symptom was raised, so nothing was invoked. There are no tool calls to show.");
+    if (!r.invoked) notes.push("Nothing was invoked, so there are no tool calls to show.");
     if (shown.some(function (e) { return e.title.indexOf("Guarded action requested") === 0; })) {
       notes.push("Each “Guarded action requested” entry and its result come from the same recorded step: the guard's decision and the result were stored together.");
     }
     if (shown.some(function (e) { return e.kind === "thought"; })) notes.push("Agent notes are message text the model returned with its tool calls. Private model reasoning was never recorded.");
-    if (truncated) notes.push(plural(truncated, "result") + " in this run " + (truncated === 1 ? "was" : "were") + " stored cut to " + DATA.trace_result_limit.toLocaleString("en-US") + " characters, and " + (truncated === 1 ? "is" : "are") + " shown as stored.");
 
     var feed = h("div", {});
     shown.forEach(function (e) { add(feed, eventNode(e)); });
     var modes = h("div", { class: "seg", role: "group", "aria-label": "Activity shown" });
-    if (trimmed) segmented(modes, [["key", "Key steps"], ["all", "All activity"]], state.allActivity ? "all" : "key", function (k) { state.allActivity = k === "all"; renderExplorer(); });
+    if (trimmed) segmented(modes, [["key", "Key steps"], ["all", "All activity (" + r.events.length + ")"]], state.allActivity ? "all" : "key", function (k) { state.allActivity = k === "all"; renderExplorer(); });
     return [
-      scenarioBrief(caseOf(g, r.case)),
-      verdict(g, r),
+      verdict(r),
       runStats(r),
       stepper(r.lifecycle),
+      scenarioBrief(caseOf(g, r.case)),
+      r.symptoms.length ? h("p", { class: "symptoms" }, h("span", { class: "symptoms-label", text: r.symptoms.length === 1 ? "Symptom at the start" : "Symptoms at the start" }),
+        r.symptoms.map(function (s) { return h("span", { class: "tag", text: s }); })) : null,
       h("div", { class: "run-grid" },
         h("div", {},
-          h("div", { class: "feed-head" }, h("h3", { text: "Recorded activity, in order" }), trimmed ? modes : null),
-          trimmed ? h("p", { class: "muted small", text: "Showing " + shown.length + " of " + plural(r.events.length, "recorded event") + "." }) : null,
+          h("div", { class: "feed-head" }, h("h3", { text: "Recorded activity" }), trimmed ? modes : null),
+          trimmed ? h("p", { class: "muted small", text: state.allActivity ? "Showing all activity from the recorded run." : "Showing key steps from the recorded run." }) : null,
           feed,
           notes.map(function (n) { return h("p", { class: "muted small", style: "margin-top:.5rem", text: n }); })),
         h("aside", { class: "side" },
-          h("h3", { text: "Symptoms at the start" }),
-          r.symptoms.length ? h("ul", { class: "side-text" }, r.symptoms.map(function (s) { return h("li", { text: s }); }))
-            : h("p", { class: "side-text", text: r.fault_present ? "None raised, although a fault was present." : "None. The system was healthy." }),
-          r.model_path ? h("p", { class: "muted small", text: r.model_path + "." }) : null,
           h("h3", { text: "How it was scored" }),
           kvTable(r.scoring.map(function (s) { return [s.label, s.value]; })),
-          r.escalation && r.escalation.summary ? h("div", {}, h("h3", { text: "Escalation summary" }), h("p", { class: "side-text", text: r.escalation.summary })) : null)),
+          r.outcome === "wrong_diagnosis" && r.status === "resolved"
+            ? h("p", { class: "muted small", style: "margin-top:.5rem", text: "The run closed itself as resolved and passed verification; the scoring is stricter than that." }) : null)),
+      r.escalation && r.escalation.summary ? h("details", { class: "panel" }, h("summary", {}, "Escalation summary"), h("p", { class: "side-text", text: r.escalation.summary })) : null,
       technical(g, r)];
   }
   function renderExplorer() {
@@ -420,7 +418,7 @@
     renderRunsTable(g); renderLatency(g); renderInvalid(g);
   }
   function renderRuns() {
-    segmented("runs-view", [["explore", "Explore a run"], ["all", "All runs"]], state.view, function (k) { state.view = k; renderRuns(); });
+    segmented("runs-view", [["explore", "Run details"], ["all", "All runs"]], state.view, function (k) { state.view = k; renderRuns(); });
     document.getElementById("view-explore").hidden = state.view !== "explore";
     document.getElementById("view-all").hidden = state.view !== "all";
     if (state.view === "explore") renderExplorer(); else renderAllRuns();
