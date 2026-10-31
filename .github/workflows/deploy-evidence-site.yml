@@ -1,0 +1,49 @@
+# Publishes only evidence-site/ to GitHub Pages. It runs no evaluation, no model and no recovery, and needs no secrets
+# beyond the deployment token GitHub provides. Enable it under Settings > Pages > Source: GitHub Actions.
+name: Deploy Evaluation & Evidence site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "evidence-site/**"
+      - "data/eval/v321-*.json"
+      - ".github/workflows/deploy-evidence-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the few packages the export check imports
+        run: pip install "pydantic>=2.6" "python-dotenv>=1.0" "requests>=2.31"
+      - name: Check the published data matches the committed results
+        run: python -m autoheal_ui.evidence_export --check
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: evidence-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
