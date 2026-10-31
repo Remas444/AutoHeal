@@ -14,7 +14,8 @@ pre-registration commits and every historical result file, unedited.
 - **The code matches the evaluated version.** Compare the checksums below (`sha256sum`, or `git hash-object` for the
   blob column, after normalising line endings to LF).
 
-Expected `pytest` result here: **264 passed, 29 skipped.** In the development repository: 293 passed.
+Expected `pytest` result here: **397 passed, 29 skipped.** That is the 264 checks from the evaluated snapshot plus
+133 tests added with the console and the evidence site. The original 293 checks all pass in the development repository.
 
 ## Checks that need the private development repository (29 skipped here)
 
@@ -40,7 +41,12 @@ cannot reach the freeze commit.
 
 - Production modules (the eleven below): **none**; byte-identical to `v3.2.1`.
 - `autoheal/evaluate.py` (7-scenario benchmark harness, not used by Suite A/B): one unused import removed at release.
-- `app.py`: the dashboard's Evaluation tab gained a read-only view of the two final result files.
+- `app.py`, `app_pages/`, `autoheal_ui/`, `assets/`, `.streamlit/`: the Operations Console, redesigned after the
+  evaluation. It is presentation only. It drives the unmodified agent through its existing `on_event` observer. Nothing
+  under `autoheal/` imports it, and every module checksummed below is unchanged.
+- `evidence-site/`, `autoheal_ui/evidence_export.py`, `.github/workflows/deploy-evidence-site.yml`: the static Evaluation &
+  Evidence website, generated from the two final result files, which are only read. `tests/test_evidence_site.py` checks
+  that every original record is embedded unchanged and that the published data matches a fresh export.
 - Documentation: README, evaluation index, notes and this file were written or updated for the submission. The final
   report and the plan are unchanged; the arithmetic erratum (historical v3.1 total 5/12, not 7/12) is recorded in
   [EVALUATION_NOTES.md](EVALUATION_NOTES.md) rather than edited into the report.

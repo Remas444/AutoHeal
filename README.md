@@ -8,6 +8,15 @@ the fix with independent probe traffic, and **escalates to a human** with eviden
 
 It is a hackathon prototype running against a SQLite simulator, not a production deployment.
 
+## Two ways to explore AutoHeal
+
+| | **Operations Console** | **Evaluation & Evidence** |
+|---|---|---|
+| Purpose | Observe, investigate, recover, verify | Compare, examine, validate, understand |
+| What it shows | The simulated system now: incidents, live agent activity, approvals | Recorded benchmark results, recorded runs, methodology, limitations |
+| How to open it | `streamlit run app.py`, see [Quick start](#quick-start) | Static website in [`evidence-site/`](evidence-site/), see [Evaluation & Evidence site](#evaluation--evidence-site) |
+| Needs | Python; an OpenRouter key only for the AI Agent | A browser. No Python, no key |
+
 ## The problem
 
 Silent failures are the expensive ones: payments that time out without an error, queues that drop messages under
@@ -67,7 +76,7 @@ guard and verifier, so the two are compared under identical constraints.
 | none | health report, logs, metrics, config, config history, read-only SQL, workflows, wait | always allowed (waiting is bounded per incident) |
 | low | `rollback_config`, `replay_dead_letter`, `resync_customers` | automatic |
 | medium | `set_config` (range-validated), `retry_stuck_payments`, `terminate_workflow` (stale heartbeat only) | automatic at the default threshold |
-| high | `purge_dead_letter` | **never automatic**: filed in the dashboard's Approvals tab |
+| high | `purge_dead_letter` | **never automatic**: filed under Human approvals in the console's Safety & Audit page |
 
 Further safeguards:
 - **Payment safety.** `retry_stuck_payments` never re-charges an order that already has a payment record. If every
@@ -101,7 +110,8 @@ How to read these numbers:
 - **Erratum:** in the final report's Suite A table, the historical v3.1 total should read **5/12** for both systems,
   not 7/12. The report is kept byte-identical; the correction is in
   [docs/EVALUATION_NOTES.md](docs/EVALUATION_NOTES.md).
-- The dashboard's **Evaluation** tab shows these committed results read-only, with the two suites kept separate.
+- The [Evaluation & Evidence site](#evaluation--evidence-site) shows these committed results read-only, with the two
+  groups kept separate and every recorded run open to inspection.
 
 ## Tech stack
 
@@ -130,9 +140,9 @@ pip install -r requirements.txt
 ```powershell
 pytest
 ```
-Expected: `264 passed, 29 skipped`. This covers the simulator, tools, guards, verifier, budget logic, agent loop,
-evaluation harnesses and the integrity of the included final evidence. The 29 skipped checks need historical result
-files or the original Git history, which are kept in the private development repository (293 passed there); each skip
+Expected: `397 passed, 29 skipped`. This covers the simulator, tools, guards, verifier, budget logic, agent loop,
+evaluation harnesses, the console, the evidence site's data and the integrity of the included final evidence. The 29 skipped checks need historical result
+files or the original Git history, which are kept in the private development repository; each skip
 prints its reason, and [docs/VERIFICATION.md](docs/VERIFICATION.md) lists them.
 
 **2. Offline demos with the rule-based playbook ($0)**
@@ -143,12 +153,18 @@ python -m autoheal.cli demo gateway_outage --llm playbook
 ```
 Expected: the first ends **RESOLVED** with verification passed; the outage ends **ESCALATED** with no changes made.
 
-**3. Dashboard**
+**3. Operations Console**
 ```powershell
 streamlit run app.py
 ```
-In the sidebar, pick an agent brain and a scenario, click **Inject**, then **Run AutoHeal**. Tabs show the live agent
-timeline, metrics, logs, config history, approvals, evaluation results and spend. The playbook brain works without a key.
+- **Operations:** choose a scenario and a recovery engine, click **Inject Fault**, then **Start Recovery**, and follow the
+  lifecycle and Agent Activity as events arrive. Open any event for its tool, arguments and result. The Rule-based
+  Playbook works without a key.
+- **System Insights:** health checks, metrics, queue conditions, logs and configuration history. It updates by itself
+  while a recovery runs.
+- **Safety & Audit:** human approvals, guardrails, the action record and Session Usage. **Advanced settings** holds the
+  automatic risk limit and dry-run mode. To see an approval request, set the limit to Low only and run the payment
+  scenario.
 
 **4. With the LLM agent (needs an OpenRouter key; costs a few cents per incident)**
 ```powershell
@@ -158,6 +174,34 @@ python -m autoheal.cli demo combo_payment_queue --llm openrouter
 python -m autoheal.cli budget
 ```
 `models` checks that both model IDs exist and support tool calling. `budget` shows actual spend.
+
+## Evaluation & Evidence site
+
+A read-only static website for the recorded results: the two evaluation groups side by side, every scenario and recorded
+run (with its lifecycle, tool calls, safety decisions and verification), and the methodology, data origin and limitations.
+It runs no model, recovery or benchmark.
+
+Planned address, once GitHub Pages is enabled: `https://remas444.github.io/AutoHeal/`
+
+**Preview locally.** Open `evidence-site/index.html` in a browser, or serve it:
+```powershell
+python -m http.server 8000 --directory evidence-site
+```
+then open <http://localhost:8000/>.
+
+**Publish.** In the repository's **Settings > Pages**, set **Source** to **GitHub Actions**. After that,
+[`.github/workflows/deploy-evidence-site.yml`](.github/workflows/deploy-evidence-site.yml) publishes `evidence-site/`, and
+nothing else, on each push to `main` that changes the site or results. It can also be started from the **Actions** tab.
+GitHub Pages on a private repository needs a paid GitHub plan, and the site's document links only work for visitors if the
+repository is public.
+
+**Where the data comes from.** `evidence-site/data/evidence.js` is generated from the two files in `data/eval/`, which are
+only read. Each original record is embedded unchanged, and display names are added alongside the original scenario
+identifiers and seeds, which remain under each run's technical details.
+```powershell
+python -m autoheal_ui.evidence_export           # regenerate
+python -m autoheal_ui.evidence_export --check   # confirm it matches the committed results
+```
 
 ## Reproducing the evaluation
 
@@ -178,7 +222,12 @@ against Git and records `production_identical_to_freeze: false` in its report.
 ## Project layout
 
 ```
-app.py                      Streamlit dashboard
+app.py                      Streamlit console entry point
+app_pages/                  Operations, System Insights, Safety & Audit
+autoheal_ui/                Console logic and evidence export (reads from autoheal; never imported by it)
+.streamlit/config.toml      Console theme
+evidence-site/              Evaluation & Evidence website (static HTML, CSS, JavaScript and generated data)
+.github/workflows/          Publishes evidence-site/ to GitHub Pages
 autoheal/
   config.py                 Settings from .env (Pydantic)
   db.py                     SQLite schema: system DB plus a separate usage ledger
@@ -196,7 +245,7 @@ autoheal/
   holdout.py                H1/H3/H4 stress-test harness
   unseen.py                 Suite A (U1-U5) harness and scoring
   prospective.py            Suite B (P01-P10) harness and scoring
-tests/                      293 offline tests (29 skip in this snapshot, see docs/VERIFICATION.md)
+tests/                      Offline tests (29 skip in this snapshot, see docs/VERIFICATION.md)
 docs/                       Evaluation report, plan, index, notes and verification
 data/eval/                  The two final evaluation results (hash-pinned)
 ```
