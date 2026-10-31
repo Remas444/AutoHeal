@@ -1,4 +1,5 @@
 """The Evaluation & Evidence site: its data must match the committed results exactly, and its wording must stay honest."""
+import hashlib
 import json
 import re
 from html.parser import HTMLParser
@@ -324,8 +325,12 @@ def test_site_paths_are_relative_and_exist():
             assert url.startswith("https://github.com/Remas444/AutoHeal/blob/main/"), url
             assert (ROOT / url.split("/blob/main/")[1]).exists(), url
             continue
-        assert not url.startswith("/") and ":" not in url, url
-        assert (SITE / url).exists(), url
+        path, _, query = url.partition("?")
+        assert not path.startswith("/") and ":" not in path, url
+        assert (SITE / path).exists(), url
+        if path in ("styles.css", "app.js", "data/evidence.js"):  # a stale browser cache must never pair these with a newer page
+            content = (SITE / path).read_bytes().replace(b"\r\n", b"\n")
+            assert query == "v=" + hashlib.sha256(content).hexdigest()[:10], url
 
 
 def test_site_makes_no_requests_and_runs_nothing():
