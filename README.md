@@ -177,9 +177,9 @@ python -m autoheal.cli budget
 
 ## Evaluation & Evidence site
 
-A read-only static website for the recorded results: the two evaluation groups side by side, every scenario and recorded
-run (with its lifecycle, tool calls, safety decisions and verification), and the methodology, data origin and limitations.
-It runs no model, recovery or benchmark.
+A read-only static website for the recorded results, in three views: an overview with the key results and limitations, a
+comparison of the AI Agent and the Rule-based Playbook, and the outcome and key steps of every recorded run. Complete traces
+are in the result files it links to. It runs no model, recovery or benchmark.
 
 Live at <https://remas444.github.io/AutoHeal/>.
 
@@ -197,7 +197,7 @@ repository is public.
 
 **Where the data comes from.** `evidence-site/data/evidence.js` is generated from the two files in `data/eval/`, which are
 only read. Each original record is embedded unchanged, and display names are added alongside the original scenario
-identifiers and seeds, which remain under each run's technical details.
+identifiers and seeds.
 ```powershell
 python -m autoheal_ui.evidence_export           # regenerate
 python -m autoheal_ui.evidence_export --check   # confirm it matches the committed results

@@ -251,60 +251,51 @@ def test_required_disclosures_are_on_the_page():
 
 
 # ------------------------------------------------------------------ navigation
-class _Details(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.depth = self.deepest = self.total = 0
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "details":
-            self.depth += 1
-            self.total += 1
-            self.deepest = max(self.deepest, self.depth)
-
-    def handle_endtag(self, tag):
-        self.depth -= tag == "details"
-
-
-def test_the_main_page_has_the_four_sections_in_order():
+def test_the_site_has_three_views_in_order():
     html = (SITE / "index.html").read_text(encoding="utf-8")
     nav = re.search(r"<nav.*?</nav>", html, re.S).group(0)
-    assert re.findall(r'href="#(\w+)"', nav) == ["overview", "comparison", "runs", "methodology"]
-    assert re.findall(r'<section id="(\w+)"', html) == ["overview", "comparison", "runs", "methodology"]
+    assert re.findall(r'href="#(\w+)"', nav) == ["overview", "comparison", "runs"]
+    assert re.findall(r'<section id="(\w+)"', html) == ["overview", "comparison", "runs"]
+    assert 'var SECTIONS = ["overview", "comparison", "runs"];' in (SITE / "app.js").read_text(encoding="utf-8")
 
 
-def test_expanders_are_few_and_never_nested():
-    parser = _Details()
-    parser.feed((SITE / "index.html").read_text(encoding="utf-8"))
-    assert parser.total == 4 and parser.deepest == 1
-    # A recorded event, a scenario summary, an escalation summary and technical details: none sits inside another.
-    script = (SITE / "app.js").read_text(encoding="utf-8")
-    assert script.count('h("details"') == 4
-    technical = script[script.index("function technical("):script.index("function runBody(")]
-    assert technical.count('h("details"') == 1 and "eventNode" not in technical
-
-
-def test_every_detail_stays_reachable_from_a_secondary_view():
+def test_there_are_no_dropdown_panels_or_secondary_views():
     html = (SITE / "index.html").read_text(encoding="utf-8")
-    for view in ('id="view-all"', 'id="runs-body"', 'id="latency-chart"', 'id="invalid-list"', 'id="provenance"'):
-        assert view in html, view
     script = (SITE / "app.js").read_text(encoding="utf-8")
-    for control in ("All activity", "Show original record", "Download this record", "JSON.stringify(r.raw, null, 2)",
-                    "Scenario summary", "Escalation summary", '["Steps", r.steps]', '["Model calls", r.llm_requests]'):
-        assert control in script, control
-    body = script[script.index("function runBody("):script.index("function renderExplorer(")]
-    assert body.index("verdict(r)") < body.index("runStats(r)") < body.index("scenarioBrief(") < body.index('"Recorded activity"')
+    assert "<details" not in html and '"details"' not in script
+    assert "data-tip" not in script and "latency-chart" not in html and "runs-body" not in html
 
 
-def test_key_steps_hide_only_supporting_events(data):
+def test_full_evidence_stays_one_link_away_on_github():
+    html = (SITE / "index.html").read_text(encoding="utf-8")
+    for doc in ("docs/FINAL_EVALUATION_v321.md", "docs/EVALUATION_PLAN_v321.md", "docs/EVALUATION_NOTES.md", "docs/VERIFICATION.md",
+                *(f"data/eval/{name}" for name in SUITE_FILES.values())):
+        assert f"https://github.com/Remas444/AutoHeal/blob/main/{doc}" in html, doc
+    script = (SITE / "app.js").read_text(encoding="utf-8")
+    assert 'DATA.site.repository + "/blob/main/" + g.source.file' in script
+    assert '"Showing " + steps.length + " of "' in script  # the reader is told when events are left out
+
+
+def _key_steps(run):
+    escalated = any(e["kind"] == "escalate" for e in run["events"])
+    return [e for e in run["events"] if e["kind"] not in {"observe", "route", "thought", "nudge", "decision", "focus"}
+            and not (e["kind"] == "action" and e["stage"] == "Decide")
+            and not (e["kind"] == "error" and e["stage"] == "Investigate")
+            and not (e["kind"] == "escalate_decision" and escalated)]
+
+
+def test_key_steps_keep_every_action_refusal_and_outcome(data):
     script = (SITE / "app.js").read_text(encoding="utf-8")
     hidden = set(re.findall(r"(\w+): 1", re.search(r"SUPPORTING_EVENTS = \{(.*?)\}", script).group(1)))
-    assert hidden == {"observe", "route", "thought", "nudge"}
-    assert 'e.kind === "action" && e.stage === "Decide"' in script
-    assert '"All activity (" + r.events.length + ")"' in script  # the reader can see how much more was recorded
+    assert hidden == {"observe", "route", "thought", "nudge", "decision", "focus"}
     for _, run in _all_runs(data):
+        steps = _key_steps(run)
+        assert steps
+        for kept in ("detect", "root_cause", "verify", "escalate", "blocked", "done"):
+            assert sum(e["kind"] == kept for e in steps) == sum(e["kind"] == kept for e in run["events"]), kept
+        assert sum(e.get("effect") == "executed" for e in steps) == sum(e.get("effect") == "executed" for e in run["events"])
         for i, event in enumerate(run["events"]):
-            if event["kind"] == "action" and event["stage"] == "Decide":  # a request is only hidden next to its execution
+            if event["kind"] == "action" and event["stage"] == "Decide":  # a request is only left out next to its execution
                 assert run["events"][i + 1]["kind"] == "action" and run["events"][i + 1]["stage"] == "Execute"
 
 

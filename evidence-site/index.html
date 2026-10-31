@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AutoHeal — Evaluation &amp; Evidence</title>
-<meta name="description" content="Evidence-driven evaluation of autonomous incident recovery: recorded results, recorded runs, methodology and limitations.">
+<meta name="description" content="Evidence-driven evaluation of autonomous incident recovery: recorded results, comparison, recorded runs and limitations.">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -12,7 +12,7 @@
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap top-row">
-    <a class="brand" href="#overview" aria-label="AutoHeal Evaluation and Evidence, back to top">
+    <a class="brand" href="#overview" aria-label="AutoHeal Evaluation and Evidence, back to the overview">
       <img src="assets/logo.svg" alt="AutoHeal" width="126" height="24">
       <span class="brand-sub">Evaluation &amp; Evidence</span>
     </a>
@@ -20,201 +20,90 @@
       <a href="#overview">Overview</a>
       <a href="#comparison">Comparison</a>
       <a href="#runs">Recorded runs</a>
-      <a href="#methodology">Methodology</a>
     </nav>
   </div>
 </header>
 
 <main id="main">
   <section id="overview" class="wrap section" aria-labelledby="h-overview">
-    <p class="eyebrow">Evidence-driven evaluation of autonomous incident recovery</p>
+    <p class="eyebrow">Recorded results, read-only. Nothing on this site runs a model, a recovery or a benchmark.</p>
     <h1 id="h-overview">When does AI-driven recovery add value over deterministic rules?</h1>
     <p class="lede" id="answer"></p>
-    <p class="notice"><strong>Recorded results, read-only.</strong> Nothing on this site runs a model, a recovery or a benchmark.
-      Every figure is computed from the committed result files.</p>
 
-    <div class="groups" id="group-cards"></div>
+    <div class="scores" id="scores"></div>
+    <p class="muted small">Correct outcomes are not the same as full recoveries: a correct outcome can be a verified recovery, a correct escalation, a partial recovery with escalation, or correctly doing nothing.</p>
+    <p class="muted small" id="regression-note"></p>
 
-    <div class="legend-block">
-      <h2 class="h3">Correct outcomes are not the same as full recoveries</h2>
-      <p class="muted">A correct outcome is whatever the scenario called for: a verified recovery, a correct escalation, a partial
-        recovery with escalation, or correctly doing nothing.</p>
-      <div class="legend" id="outcome-legend"></div>
+    <div class="columns">
+      <div class="callout warn">
+        <h2 class="h3">Important limitations</h2>
+        <ul>
+          <li><strong>Same authors.</strong> Prospective scenarios were written by the team that developed the agent, after inspecting this simulator. They are not independently designed real-world unseen failures. <span data-fig="bias"></span></li>
+          <li><strong>Small, correlated samples.</strong> <span data-fig="sample"></span></li>
+          <li><strong>No claim of statistical significance.</strong> <span data-fig="stats"></span></li>
+          <li><strong>Simulation.</strong> The backend, faults and hidden checks are hand-built. Results do not transfer to arbitrary production systems.</li>
+          <li><strong>Detection gap.</strong> Both systems share one detector, which misses backlogs that grow intermittently.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h2 class="h3">How it was tested</h2>
+        <ul>
+          <li>Same scenarios, starting states, tools, safety controls and independent verification for both systems.</li>
+          <li>Scenarios were defined after the production version was frozen. Each registered scenario and seed ran once, with no reruns, and hidden checks that neither engine can see scored the result.</li>
+          <li>An <strong>internally built, synthetic e-commerce environment</strong>, with no real customer or transaction records. The language models were used only for inference and tool calling. They were not trained or fine-tuned on this data.</li>
+          <li>Tool results were stored cut to <span data-fig="limit"></span> characters, so some recorded results are incomplete.</li>
+        </ul>
+        <p class="doc-links">
+          <a href="https://github.com/Remas444/AutoHeal/blob/main/docs/FINAL_EVALUATION_v321.md">Final report</a>
+          <a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_PLAN_v321.md">Registered plan</a>
+          <a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_NOTES.md">Notes and errata</a>
+          <a href="https://github.com/Remas444/AutoHeal/blob/main/docs/VERIFICATION.md">Verification and checksums</a>
+          <a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteB-prospective.json">Prospective results file</a>
+          <a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteA-regression.json">Regression results file</a>
+        </p>
+      </div>
     </div>
-
-    <h2 class="h3" id="facts-title"></h2>
-    <div class="tiles" id="key-facts"></div>
   </section>
 
   <section id="comparison" class="wrap section" aria-labelledby="h-comparison">
     <h2 id="h-comparison">AI Agent vs Rule-based Playbook</h2>
-    <p class="muted intro">Same scenarios, starting states, tools, safety controls and independent verification. Select a scenario to see what it tests and its recorded runs.</p>
-
     <div class="controls">
       <div class="seg" role="group" aria-label="Evaluation group" id="compare-group"></div>
     </div>
-    <p class="muted group-note" id="compare-note" hidden></p>
+    <p class="muted intro" id="compare-note"></p>
 
-    <table class="matrix" id="matrix">
-      <caption class="sr">Results by scenario for both systems</caption>
-      <thead><tr><th scope="col">Scenario</th><th scope="col">AI Agent</th><th scope="col">Rule-based Playbook</th></tr></thead>
-      <tbody id="matrix-body"></tbody>
-    </table>
-
-    <div class="cards three" id="insights"></div>
-
-    <h3>Measured side by side</h3>
-    <table class="metrics">
-      <thead><tr><th scope="col">Measure</th><th scope="col" class="num">AI Agent</th><th scope="col" class="num">Rule-based Playbook</th></tr></thead>
-      <tbody id="metrics-body"></tbody>
-    </table>
+    <div class="compare">
+      <table class="matrix">
+        <caption class="sr">Results by scenario for both systems. Select a scenario to open its recorded run.</caption>
+        <thead><tr><th scope="col">Scenario</th><th scope="col">AI Agent</th><th scope="col">Rule-based Playbook</th></tr></thead>
+        <tbody id="matrix-body"></tbody>
+      </table>
+      <table class="metrics">
+        <caption class="sr">Measures for both systems</caption>
+        <thead><tr><th scope="col">Measure</th><th scope="col" class="num">AI Agent</th><th scope="col" class="num">Playbook</th></tr></thead>
+        <tbody id="metrics-body"></tbody>
+      </table>
+    </div>
     <p class="muted small" id="metrics-note"></p>
   </section>
 
   <section id="runs" class="wrap section" aria-labelledby="h-runs">
     <h2 id="h-runs">Recorded runs</h2>
-    <p class="notice"><strong>A replay of recorded evidence, not a new execution.</strong> Each entry is what the evaluated run stored.
-      Gaps in a record are left as gaps.</p>
+    <p class="muted intro">A replay of recorded evidence, not a new execution.</p>
 
-    <div class="controls">
-      <div class="seg" role="group" aria-label="Recorded runs view" id="runs-view"></div>
+    <div class="selectors">
+      <label>Scenario<select id="x-case"></select></label>
+      <div class="field"><span class="field-label">Recorded run</span><div class="seg" role="group" aria-label="Recorded run" id="x-run"></div></div>
+      <div class="field"><span class="field-label">Recovery engine</span><div class="seg" role="group" aria-label="Recovery engine" id="x-engine"></div></div>
     </div>
-
-    <div id="view-explore">
-      <div class="selectors">
-        <label>Scenario<select id="x-case"></select></label>
-        <div class="field"><span class="field-label">Recorded run</span><div class="seg" role="group" aria-label="Recorded run" id="x-run"></div></div>
-        <div class="field"><span class="field-label">Recovery engine</span><div class="seg" role="group" aria-label="Recovery engine" id="x-engine"></div></div>
-      </div>
-      <div id="x-output"></div>
-    </div>
-
-    <div id="view-all" hidden>
-      <div class="controls">
-        <div class="seg" role="group" aria-label="Evaluation group for all runs" id="all-group"></div>
-      </div>
-      <div class="scroll"><table class="runs-table">
-        <thead><tr><th scope="col">Scenario</th><th scope="col">Run</th><th scope="col">Engine</th><th scope="col">Outcome</th><th scope="col">Correct</th>
-          <th scope="col" class="num">Steps</th><th scope="col" class="num">Tool calls</th><th scope="col" class="num">Actions</th><th scope="col" class="num">Time</th><th scope="col" class="num">API cost</th></tr></thead>
-        <tbody id="runs-body"></tbody>
-      </table></div>
-
-      <h3>Time to finish, per recorded run</h3>
-      <div class="chart" id="latency-chart"></div>
-      <p class="muted small">Runs where the engine was invoked. Playbook runs finish almost at once, so their points overlap. Select a point to open that run.</p>
-
-      <div id="invalid-panel">
-        <h3>Invalid tool calls by the AI Agent</h3>
-        <p class="muted">A genuine tool-use limitation: the model wrote read-only queries with a wrong column or query shape. Each was
-          rejected without any effect on the system.</p>
-        <div id="invalid-list"></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="methodology" class="wrap section" aria-labelledby="h-method">
-    <h2 id="h-method">Methodology, data and limitations</h2>
-
-    <p class="muted intro">Each registered scenario and seed ran once, with no reruns and no code changes between runs. Hidden checks that neither engine can see score the result.</p>
-
-    <div class="callout">
-      <h3>Where the data comes from</h3>
-      <p>AutoHeal is evaluated on an <strong>internally built, synthetic e-commerce environment</strong>. It does not use a downloaded
-        public dataset or real customer or transaction records. Customers are generated (for example
-        <code>customer12@example.com</code>), and orders, payments and queues are produced by a seeded simulation. It is not connected
-        to any production system.</p>
-      <p>The language models were used only for <strong>inference and tool calling</strong>. They were not trained or fine-tuned on this data.</p>
-    </div>
-
-    <div class="callout warn">
-      <h3>Limitations to keep in mind</h3>
-      <ul>
-        <li><strong>Same authors.</strong> Prospective scenarios were written by the team that developed the agent, after inspecting this simulator. They are not independently designed real-world unseen failures.</li>
-        <li><strong>Designer bias.</strong> <span data-fig="bias"></span> Some detection and decision thresholds were tuned with earlier scenarios in view.</li>
-        <li><strong>Small, correlated samples.</strong> <span data-fig="sample"></span></li>
-        <li><strong>No claim of statistical significance.</strong> <span data-fig="stats"></span></li>
-        <li><strong>Simulation.</strong> The backend, faults and hidden checks are hand-built. Results do not transfer to arbitrary production systems.</li>
-        <li><strong>Latency and cost.</strong> <span data-fig="cost"></span></li>
-        <li><strong>Tool failures.</strong> <span data-fig="tools"></span></li>
-        <li><strong>Detection gap.</strong> Both systems share one detector, which misses backlogs that grow intermittently.</li>
-      </ul>
-    </div>
-
-    <div class="doc-links">
-      <h3>Supporting documents</h3>
-      <ul>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/FINAL_EVALUATION_v321.md">Final evaluation report</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_PLAN_v321.md">Registered evaluation plan</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_NOTES.md">Evaluation notes and errata</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/docs/VERIFICATION.md">Verification and checksums</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteB-prospective.json">Prospective results file</a></li>
-        <li><a href="https://github.com/Remas444/AutoHeal/blob/main/data/eval/v321-suiteA-regression.json">Development and regression results file</a></li>
-      </ul>
-    </div>
-
-    <h3>Full method and provenance</h3>
-    <details class="panel">
-      <summary>How the simulated environment works</summary>
-      <p>The simulation advances in <strong>ticks</strong>, one step of simulated time, and stores its state in a SQLite database.</p>
-      <dl class="defs">
-        <dt>Orders and payments</dt>
-        <dd>Normal traffic creates 12 orders per tick, with seeded random customers and amounts. A simulated payment gateway responds in 600 to 1,400 ms. If that exceeds the configured timeout the call times out, and the order silently stays unpaid.</dd>
-        <dt>Queue and shipping</dt>
-        <dd>Paid orders enter a fulfilment queue with a maximum depth. A worker ships a fixed batch per tick. Messages that do not fit go to a dead-letter store.</dd>
-        <dt>Customer data and workflows</dt>
-        <dd>A sync job copies customer records from a source system a batch at a time. Scheduled workflows share a single lock, and a running workflow that holds it sends heartbeats.</dd>
-        <dt>Controlled faults</dt>
-        <dd>Each scenario changes the system after a short warm-up: a simulated release changes a setting, records are left inconsistent, a workflow hangs, or misleading log lines are planted. The fault then affects later ticks through the normal pipeline.</dd>
-        <dt>Observable evidence</dt>
-        <dd>Logs, per-tick metrics, configuration history with who changed what, and the operational tables through a read-only query tool. Scenario definitions and hidden checks are not visible to either recovery engine.</dd>
-      </dl>
-    </details>
-
-    <details class="panel">
-      <summary>How the two recovery engines are compared</summary>
-      <dl class="defs">
-        <dt>Same detector</dt>
-        <dd>Ten deterministic health checks decide whether a recovery starts at all. If they raise nothing, no model is called and neither engine runs.</dd>
-        <dt>AI Agent</dt>
-        <dd>A language model investigates through tools and chooses repairs. Single-symptom incidents start on a cheaper model. Several symptoms, or a long undecided investigation, move to a stronger one.</dd>
-        <dt>Rule-based Playbook</dt>
-        <dd>The shared baseline: fixed rules, no language model, no investigation. It uses the same tool protocol, so it goes through the same tools and safety controls and faces the same verification.</dd>
-        <dt>Safety controls</dt>
-        <dd>A risk policy, limits on actions, steps and waiting, a guard against repeating a repair that makes no progress, and a payment rule that never charges an order with a payment record. Every limit ends in an escalation.</dd>
-        <dt>Independent verification</dt>
-        <dd>Closing an incident triggers plain code, not model judgement: 16 probe orders go through the real pipeline, then every health check runs again. An incident closes as resolved only if all probes ship and no check fails.</dd>
-      </dl>
-    </details>
-
-    <details class="panel">
-      <summary>How the evaluation was designed and scored</summary>
-      <dl class="defs">
-        <dt>Prospective Scenario Evaluation</dt>
-        <dd>Ten scenario types, defined after the production version was frozen. Two seeded runs each, per system. Seeds come from a fixed hash rule rather than being hand-picked. Possible bias was declared per scenario before any run.</dd>
-        <dt>Development &amp; Regression Tests</dt>
-        <dd>Five scenario types, some with three runs, that the system was improved against. They show regression safety. They are reported separately and never combined with the prospective results.</dd>
-        <dt>Execution rules</dt>
-        <dd>One run per registered scenario and seed, with no reruns and no code changes between runs. Both systems start from the same builder and seed.</dd>
-        <dt>Scoring</dt>
-        <dd>Each run receives one outcome from hidden checks that neither engine can see. The prospective scoring also requires a correct cause, named orders in an escalation, six further healthy ticks after recovery, and no unrelated changes. Unsafe actions attempted and executed are counted separately. <span data-fig="amendment"></span></dd>
-        <dt>What is stored</dt>
-        <dd>Every run keeps its outcome, tool trace, model requests, tokens, cost and latency in two frozen result files, whose checksums are pinned by tests. Tool results were stored cut to <span data-fig="limit"></span> characters, so some recorded results are incomplete.</dd>
-      </dl>
-    </details>
-
-    <details class="panel">
-      <summary>Provenance and source files</summary>
-      <p class="muted">Internal names and versions, for reviewers. Each run's full original record is available under its technical details.</p>
-      <div id="provenance"></div>
-    </details>
+    <div id="x-output"></div>
   </section>
 </main>
 
 <footer class="foot">
   <div class="wrap">AutoHeal runs against a simulated environment. These are recorded evaluation results, not production measurements.</div>
 </footer>
-<div id="tip" role="tooltip" hidden></div>
-<noscript><p class="wrap notice">The interactive results on this page need JavaScript. The original result files are in the project repository.</p></noscript>
+<noscript><p class="wrap notice">The results on this page need JavaScript. The original result files are in the <a href="https://github.com/Remas444/AutoHeal/blob/main/docs/EVALUATION_INDEX.md">project repository</a>.</p></noscript>
 <script src="data/evidence.js"></script>
 <script src="app.js"></script>
 </body>
